@@ -41,17 +41,17 @@
   name = "github.com/stretchr/testify"
   version = "1.4.0"
 
-[[constraint]]
+[[override]]
   name = "github.com/vmware-tanzu/velero"
-  version = "1.1.0-beta.1"
+  branch = "master"
 
 [[constraint]]
   name = "k8s.io/api"
-  version = "kubernetes-1.14.0"
+  version = "kubernetes-1.15.3"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.14.0"
+  version = "kubernetes-1.15.3"
 
 [prune]
   go-tests = true
