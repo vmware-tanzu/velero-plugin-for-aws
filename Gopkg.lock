@@ -2,7 +2,7 @@
 
 
 [[projects]]
-  digest = "1:e8187993e8d2158191e12f6d7e4f766f2370a7208f55c42ba5f24ead37655ac4"
+  digest = "1:1091668d261d05b9a02fd0f2bc0ac5256043a0480f97fa098f3ea5d97ad6f2b1"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -48,8 +48,8 @@
     "service/sts/stsiface",
   ]
   pruneopts = "UT"
-  revision = "9deb6031265e7efb2ed0c2c87cf4549ed9483554"
-  version = "v1.25.5"
+  revision = "472ba41213bd699ff50a642b60afd89181d7bb9b"
+  version = "v1.25.6"
 
 [[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
@@ -218,8 +218,8 @@
   version = "v1.4.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:244e1303d8776178e7f4159bd4b7b85cde75b2a3d0402b1df5fc90f1dd00f18f"
+  branch = "c-1873-refactor-out-providers"
+  digest = "1:20907e3aaf4c13e4e86405751fb56c6dccb48d35454be4c7ebd97b80b8a6f40f"
   name = "github.com/vmware-tanzu/velero"
   packages = [
     "pkg/apis/velero/v1",
@@ -230,7 +230,8 @@
     "pkg/util/logging",
   ]
   pruneopts = "UT"
-  revision = "f009fe9bd17e128be99ff6403aaaba4c5a6293fa"
+  revision = "f2b5b7f4a5859ece9efc00f629a68f8f9a956e70"
+  source = "github.com/carlisia/velero"
 
 [[projects]]
   branch = "master"

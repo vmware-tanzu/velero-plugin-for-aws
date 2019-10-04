@@ -43,7 +43,8 @@
 
 [[override]]
   name = "github.com/vmware-tanzu/velero"
-  branch = "master"
+  branch = "c-1873-refactor-out-providers"
+  source = "github.com/carlisia/velero"
 
 [[constraint]]
   name = "k8s.io/api"
