@@ -67,7 +67,7 @@ type ObjectStore struct {
 	serverSideEncryption string
 }
 
-func NewObjectStore(logger logrus.FieldLogger) *ObjectStore {
+func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
 	return &ObjectStore{log: logger}
 }
 

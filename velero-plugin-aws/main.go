@@ -28,5 +28,5 @@ func main() {
 }
 
 func newAwsObjectStore(logger logrus.FieldLogger) (interface{}, error) {
-	return NewObjectStore(logger), nil
+	return newObjectStore(logger), nil
 }
