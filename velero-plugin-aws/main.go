@@ -1,5 +1,5 @@
 /*
-Copyright 2018, 2019 the Velero contributors.
+Copyright 2017, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,17 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package aws
+package main
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/sirupsen/logrus"
+	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 )
 
-func TestS3URL(t *testing.T) {
-	assert.True(t, IsValidS3URLScheme("http://foo"))
-	assert.True(t, IsValidS3URLScheme("https://foo"))
-	assert.False(t, IsValidS3URLScheme("httpd://foo"))
-	assert.False(t, IsValidS3URLScheme(""))
+func main() {
+	veleroplugin.NewServer().
+		RegisterObjectStore("velero.io/aws", newAwsObjectStore).
+		Serve()
+}
+
+func newAwsObjectStore(logger logrus.FieldLogger) (interface{}, error) {
+	return NewObjectStore(logger), nil
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 the Velero contributors.
+Copyright 2018, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package aws
+package main
 
 import (
-	"io/ioutil"
+	"testing"
 
-	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
-func newLogger() logrus.FieldLogger {
-	logger := logrus.New()
-	logger.Out = ioutil.Discard
-	return logrus.NewEntry(logger)
+func TestS3URL(t *testing.T) {
+	assert.True(t, IsValidS3URLScheme("http://foo"))
+	assert.True(t, IsValidS3URLScheme("https://foo"))
+	assert.False(t, IsValidS3URLScheme("httpd://foo"))
+	assert.False(t, IsValidS3URLScheme(""))
 }
