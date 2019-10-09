@@ -218,8 +218,8 @@
   version = "v1.4.0"
 
 [[projects]]
-  branch = "c-1873-refactor-out-providers"
-  digest = "1:20907e3aaf4c13e4e86405751fb56c6dccb48d35454be4c7ebd97b80b8a6f40f"
+  branch = "master"
+  digest = "1:a453485a0d793767500cd76360882262dabe1bca80656a464094664a0f117295"
   name = "github.com/vmware-tanzu/velero"
   packages = [
     "pkg/apis/velero/v1",
@@ -230,8 +230,7 @@
     "pkg/util/logging",
   ]
   pruneopts = "UT"
-  revision = "f2b5b7f4a5859ece9efc00f629a68f8f9a956e70"
-  source = "github.com/carlisia/velero"
+  revision = "d868b71e299eca900d30e0aa47ade05eabd615ca"
 
 [[projects]]
   branch = "master"
