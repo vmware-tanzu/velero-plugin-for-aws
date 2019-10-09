@@ -17,8 +17,8 @@ PROJECT = velero-plugin-aws
 PKG := github.com/$(ORG)/$(PROJECT)
 BIN := $(PROJECT)
 
-REGISTRY ?= gcr.io/heptio-images
-IMAGE := $(REGISTRY)/plugin-aws
+REGISTRY ?= carlisia
+IMAGE ?= $(REGISTRY)/plugin-aws
 BUILD_IMAGE ?= golang:1.12-stretch
 
 # Which architecture to build - see $(ALL_ARCH) for options.
@@ -26,6 +26,8 @@ BUILD_IMAGE ?= golang:1.12-stretch
 # if it wasn't specified by the caller.
 local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
 ARCH ?= linux-amd64
+
+VERSION ?= master
 
 platform_temp = $(subst -, ,$(ARCH))
 GOOS = $(word 1, $(platform_temp))
@@ -58,7 +60,7 @@ _output/bin/$(GOOS)/$(GOARCH)/$(BIN): build-dirs
 
 TTY := $(shell tty -s && echo "-t")
 
-shell: build-dirs 
+shell: build-dirs
 	@echo "running docker: $@"
 	@docker run \
 		-e GOFLAGS \
@@ -82,7 +84,13 @@ build-dirs:
 
 container: all
 	cp Dockerfile _output/bin/$(GOOS)/$(GOARCH)/Dockerfile
-	docker build -t $(IMAGE) -f _output/bin/$(GOOS)/$(GOARCH)/Dockerfile _output/bin/$(GOOS)/$(GOARCH)
+	docker build -t $(IMAGE):$(VERSION) -f _output/bin/$(GOOS)/$(GOARCH)/Dockerfile _output/bin/$(GOOS)/$(GOARCH)
+	
+push:
+	@docker push $(IMAGE):$(VERSION)
+
+container-name:
+	@echo "container: $(IMAGE):$(VERSION)"
 
 all-ci: $(addprefix ci-, $(BIN))
 
