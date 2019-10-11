@@ -95,7 +95,7 @@ all-ci: $(addprefix ci-, $(BIN))
 ci-%:
 	$(MAKE) --no-print-directory BIN=$* ci
 
-ci: all
+ci:
 	mkdir -p _output
 	CGO_ENABLED=0 go test -v -timeout 60s ./...
 
