@@ -1,35 +1,27 @@
-# Run Velero on AWS
+# Velero plugins for AWS
+
+## Overview
+
+This repository contains these plugins to support running Velero on AWS:
+
+- An object store plugin for persisting and retrieving backups on AWS S3. Content of backup is log files, warning/error files, restore logs.
+
+- A volume snapshotter plugin for creating snapshots from volumes (during a backup) and volumes from snapshots (during a restore) on AWS EBS.
+
+## Setup
 
 To set up Velero on AWS, you:
 
-* Download an official release of Velero
-* Create your S3 bucket
-* Create an AWS IAM user for Velero
-* Install the server
+* [Create an S3 bucket][1]
+* [Set permissions for Velero][2]
+* [Install and run Velero][3]
+* [Migration][5]
 
-If you do not have the `aws` CLI locally installed, follow the [user guide][5] to set it up.
-
-## Download Velero
-
-1. Download the [latest official release's](https://github.com/vmware-tanzu/velero/releases) tarball for your client platform.
-
-    _We strongly recommend that you use an [official release](https://github.com/vmware-tanzu/velero/releases) of
-Velero. The tarballs for each release contain the `velero` command-line client. The code in the master branch
-of the Velero repository is under active development and is not guaranteed to be stable!_
-
-2. Extract the tarball:
-
-    ```
-    tar -xvf <RELEASE-TARBALL-NAME>.tar.gz -C /dir/to/extract/to
-    ```
-
-    We'll refer to the directory you extracted to as the "Velero directory" in subsequent steps.
-
-3. Move the `velero` binary from the Velero directory to somewhere in your PATH.
+If you do not have the `aws` CLI locally installed, follow the [user guide][6] to set it up.
 
 ## Create S3 bucket
 
-Velero requires an object storage bucket to store backups in, preferrably unique to a single Kubernetes cluster (see the [FAQ][20] for more details). Create an S3 bucket, replacing placeholders appropriately:
+Velero requires an object storage bucket to store backups in, preferably unique to a single Kubernetes cluster (see the [FAQ][11] for more details). Create an S3 bucket, replacing placeholders appropriately:
 
 ```bash
 BUCKET=<YOUR_BUCKET>
@@ -47,9 +39,11 @@ aws s3api create-bucket \
     --region us-east-1
 ```
 
-## Create IAM user
+## Set permissions for Velero
 
-For more information, see [the AWS documentation on IAM users][14].
+### Set permissions with an IAM user
+
+For more information, see [the AWS documentation on IAM users][10].
 
 1. Create the IAM user:
 
@@ -142,57 +136,7 @@ For more information, see [the AWS documentation on IAM users][14].
     where the access key id and secret are the values returned from the `create-access-key` request.
 
 
-## Install and start Velero
-
-Install Velero, including all prerequisites, into the cluster and start the deployment. This will create a namespace called `velero`, and place a deployment named `velero` in it.
-
-```bash
-velero install \
-    --provider aws \
-    --bucket $BUCKET \
-    --secret-file ./credentials-velero \
-    --backup-location-config region=$REGION \
-    --snapshot-location-config region=$REGION
-```
-
-Additionally, you can specify `--use-restic` to enable restic support, and `--wait` to wait for the deployment to be ready.
-
-(Optional) Specify [additional configurable parameters][21] for the `--backup-location-config` flag.
-
-(Optional) Specify [additional configurable parameters][6] for the `--snapshot-location-config` flag.
-
-(Optional) Specify [CPU and memory resource requests and limits][22] for the Velero/restic pods.
-
-For more complex installation needs, use either the Helm chart, or add `--dry-run -o yaml` options for generating the YAML representation for the installation.
-
-## Setting AWS_CLUSTER_NAME (Optional)
-
-If you have multiple clusters and you want to support migration of resources between them, you can use `kubectl edit deploy/velero -n velero` to edit your deployment:
-
-Add the environment variable `AWS_CLUSTER_NAME` under `spec.template.spec.env`, with the current cluster's name. When restoring backup, it will make Velero (and cluster it's running on) claim ownership of AWS volumes created from snapshots taken on different cluster.
-The best way to get the current cluster's name is to either check it with used deployment tool or to read it directly from the EC2 instances tags.
-
-The following listing shows how to get the cluster's nodes EC2 Tags. First, get the nodes external IDs (EC2 IDs):
-
-```bash
-kubectl get nodes -o jsonpath='{.items[*].spec.externalID}'
-```
-
-Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search for one of the following:
-
-  * The `kubernetes.io/cluster/<AWS_CLUSTER_NAME>` tag of the value `owned`. The `<AWS_CLUSTER_NAME>` is then your cluster's name:
-
-    ```bash
-    aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=value,Values=owned"
-    ```
-
-  * If the first output returns nothing, then check for the legacy Tag `KubernetesCluster` of the value `<AWS_CLUSTER_NAME>`:
-
-    ```bash
-    aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=key,Values=KubernetesCluster"
-    ```
-
-## ALTERNATIVE: Setup permissions using kube2iam
+### Set permissions using kube2iam
 
 [Kube2iam](https://github.com/jtblin/kube2iam) is a Kubernetes application that allows managing AWS IAM permissions for pod via annotations rather than operating on API keys.
 
@@ -297,10 +241,69 @@ velero install \
     --no-secret
 ```
 
-[0]: namespace.md
-[5]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
-[6]: api-types/volumesnapshotlocation.md#aws
-[14]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
-[20]: faq.md
-[21]: api-types/backupstoragelocation.md#aws
-[22]: install-overview.md#velero-resource-requirements
+## Install and run Velero
+
+[Download][4] Velero
+
+Install Velero, including all prerequisites, into the cluster and start the deployment. This will create a namespace called `velero`, and place a deployment named `velero` in it.
+
+```bash
+velero install \
+    --provider aws \
+    --bucket $BUCKET \
+    --secret-file ./credentials-velero \
+    --backup-location-config region=$REGION \
+    --snapshot-location-config region=$REGION
+```
+
+Additionally, you can specify `--use-restic` to enable restic support, and `--wait` to wait for the deployment to be ready.
+
+(Optional) Specify [additional configurable parameters][7] for the `--backup-location-config` flag.
+
+(Optional) Specify [additional configurable parameters][8] for the `--snapshot-location-config` flag.
+
+(Optional) Specify [CPU and memory resource requests and limits][9] for the Velero/restic pods.
+
+For more complex installation needs, use either the Helm chart, or add `--dry-run -o yaml` options for generating the YAML representation for the installation.
+
+## Migration
+
+### Setting AWS_CLUSTER_NAME (Optional)
+
+If you have multiple clusters and you want to support migration of resources between them, you can use `kubectl edit deploy/velero -n velero` to edit your deployment:
+
+Add the environment variable `AWS_CLUSTER_NAME` under `spec.template.spec.env`, with the current cluster's name. When restoring backup, it will make Velero (and cluster it's running on) claim ownership of AWS volumes created from snapshots taken on different cluster.
+The best way to get the current cluster's name is to either check it with used deployment tool or to read it directly from the EC2 instances tags.
+
+The following listing shows how to get the cluster's nodes EC2 Tags. First, get the nodes external IDs (EC2 IDs):
+
+```bash
+kubectl get nodes -o jsonpath='{.items[*].spec.externalID}'
+```
+
+Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search for one of the following:
+
+  * The `kubernetes.io/cluster/<AWS_CLUSTER_NAME>` tag of the value `owned`. The `<AWS_CLUSTER_NAME>` is then your cluster's name:
+
+    ```bash
+    aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=value,Values=owned"
+    ```
+
+  * If the first output returns nothing, then check for the legacy Tag `KubernetesCluster` of the value `<AWS_CLUSTER_NAME>`:
+
+    ```bash
+    aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=key,Values=KubernetesCluster"
+    ```
+
+
+[1]: #Create-S3-bucket
+[2]: #Set-permissions-for-Veleroe
+[3]: #Install-and-run-Velero
+[4]: https://velero.io/docs/master/install-overview/
+[5]: #Migration
+[6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
+[7]: api-types/backupstoragelocation.md#aw
+[8]: api-types/volumesnapshotlocation.md#aws
+[9]: https://velero.io/docs/master/install-requirements
+[10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
+[11]: https://velero.io/docs/master/faq/

@@ -24,9 +24,14 @@ import (
 func main() {
 	veleroplugin.NewServer().
 		RegisterObjectStore("velero.io/aws", newAwsObjectStore).
+		RegisterVolumeSnapshotter("velero.io/aws", newAwsVolumeSnapshotter).
 		Serve()
 }
 
 func newAwsObjectStore(logger logrus.FieldLogger) (interface{}, error) {
 	return newObjectStore(logger), nil
+}
+
+func newAwsVolumeSnapshotter(logger logrus.FieldLogger) (interface{}, error) {
+	return newVolumeSnapshotter(logger), nil
 }

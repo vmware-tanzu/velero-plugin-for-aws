@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ORG = vmware-tanzu
-PROJECT = velero-plugin-aws
-PKG := github.com/$(ORG)/$(PROJECT)
-BIN := $(PROJECT)
+PKG := github.com/vmware-tanzu/velero-plugin-aws
+BIN := velero-plugin-aws
 
 REGISTRY ?= carlisia
 IMAGE ?= $(REGISTRY)/plugin-aws
@@ -46,7 +44,7 @@ local: build-dirs
 	OUTPUT_DIR=$$(pwd)/_output/bin/$(GOOS)/$(GOARCH) \
 	./hack/build.sh
 
-build: _output/bin/$(GOOS)/$(GOARCH)/$(BIN) ./$(PROJECT)
+build: _output/bin/$(GOOS)/$(GOARCH)/$(BIN) ./$(BIN)
 
 _output/bin/$(GOOS)/$(GOARCH)/$(BIN): build-dirs
 	@echo "building: $@"
@@ -99,7 +97,7 @@ ci-%:
 
 ci:
 	mkdir -p _output
-	CGO_ENABLED=0 go build -v -o _output/bin/$(GOOS)/$(GOARCH)/$(BIN) ./$(BIN)
+	CGO_ENABLED=0 go test -v -timeout 60s ./...
 
 clean:
 	@echo "cleaning"

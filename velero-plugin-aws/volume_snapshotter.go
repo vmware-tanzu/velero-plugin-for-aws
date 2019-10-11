@@ -63,7 +63,7 @@ func getSession(config *aws.Config, profile string) (*session.Session, error) {
 	return sess, nil
 }
 
-func NewVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
+func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 	return &VolumeSnapshotter{log: logger}
 }
 
