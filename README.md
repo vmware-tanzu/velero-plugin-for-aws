@@ -299,13 +299,13 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 
 
 [1]: #Create-S3-bucket
-[2]: #Set-permissions-for-Veleroe
+[2]: #Set-permissions-for-Velero
 [3]: #Install-and-start-Velero
 [4]: https://velero.io/docs/master/install-overview/
 [5]: #Migrating-PVs-across-clusters
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
-[7]: api-types/backupstoragelocation.md#aw
-[8]: api-types/volumesnapshotlocation.md#aws
+[7]: backupstoragelocation.md#aws
+[8]: volumesnapshotlocation.md#aws
 [9]: https://velero.io/docs/master/install-requirements
 [10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
 [11]: https://velero.io/docs/master/faq/
