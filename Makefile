@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PKG := github.com/vmware-tanzu/velero-plugin-aws
-BIN := velero-plugin-aws
+PKG := github.com/vmware-tanzu/velero-plugin-for-aws
+BIN := velero-plugin-for-aws
 
 REGISTRY ?= carlisia
-IMAGE ?= $(REGISTRY)/plugin-aws
+IMAGE ?= $(REGISTRY)/plugin-for-aws
 BUILD_IMAGE ?= golang:1.12-stretch
 
 # Which architecture to build - see $(ALL_ARCH) for options.
@@ -95,7 +95,7 @@ all-ci: $(addprefix ci-, $(BIN))
 ci-%:
 	$(MAKE) --no-print-directory BIN=$* ci
 
-ci:
+ci-all:
 	mkdir -p _output
 	CGO_ENABLED=0 go test -v -timeout 60s ./...
 

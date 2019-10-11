@@ -14,7 +14,7 @@ To set up Velero on AWS, you:
 
 * [Create an S3 bucket][1]
 * [Set permissions for Velero][2]
-* [Install and run Velero][3]
+* [Install and start Velero][3]
 * [Migration][5]
 
 If you do not have the `aws` CLI locally installed, follow the [user guide][6] to set it up.
@@ -241,7 +241,7 @@ velero install \
     --no-secret
 ```
 
-## Install and run Velero
+## Install and start Velero
 
 [Download][4] Velero
 
@@ -298,7 +298,7 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Veleroe
-[3]: #Install-and-run-Velero
+[3]: #Install-and-start-Velero
 [4]: https://velero.io/docs/master/install-overview/
 [5]: #Migration
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
