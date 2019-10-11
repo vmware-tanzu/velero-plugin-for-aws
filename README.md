@@ -15,7 +15,7 @@ To set up Velero on AWS, you:
 * [Create an S3 bucket][1]
 * [Set permissions for Velero][2]
 * [Install and start Velero][3]
-* [Migration][5]
+* [Migrating PVs across clusters][5]
 
 If you do not have the `aws` CLI locally installed, follow the [user guide][6] to set it up.
 
@@ -268,7 +268,7 @@ Additionally, you can specify `--use-restic` to enable restic support, and `--wa
 
 For more complex installation needs, use either the Helm chart, or add `--dry-run -o yaml` options for generating the YAML representation for the installation.
 
-## Migration
+## Migrating PVs across clusters
 
 ### Setting AWS_CLUSTER_NAME (Optional)
 
@@ -302,7 +302,7 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [2]: #Set-permissions-for-Veleroe
 [3]: #Install-and-start-Velero
 [4]: https://velero.io/docs/master/install-overview/
-[5]: #Migration
+[5]: #Migrating-PVs-across-clusters
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
 [7]: api-types/backupstoragelocation.md#aw
 [8]: api-types/volumesnapshotlocation.md#aws
