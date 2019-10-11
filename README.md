@@ -41,7 +41,7 @@ aws s3api create-bucket \
 
 ## Set permissions for Velero
 
-### Set permissions with an IAM user
+### Option 1: Set permissions with an IAM user
 
 For more information, see [the AWS documentation on IAM users][10].
 
@@ -136,7 +136,7 @@ For more information, see [the AWS documentation on IAM users][10].
     where the access key id and secret are the values returned from the `create-access-key` request.
 
 
-### Set permissions using kube2iam
+### Option 2: Set permissions using kube2iam
 
 [Kube2iam](https://github.com/jtblin/kube2iam) is a Kubernetes application that allows managing AWS IAM permissions for pod via annotations rather than operating on API keys.
 
@@ -229,31 +229,33 @@ It can be set up for Velero by creating a role that will have required permissio
       --policy-document file://./velero-policy.json
     ```
 
-4. Use the `--pod-annotations` argument on `velero install` to add the following annotation:
-
-```bash
-velero install \
-    --pod-annotations iam.amazonaws.com/role=arn:aws:iam::<AWS_ACCOUNT_ID>:role/<VELERO_ROLE_NAME> \
-    --provider aws \
-    --bucket $BUCKET \
-    --backup-location-config region=$REGION \
-    --snapshot-location-config region=$REGION \
-    --no-secret
-```
-
 ## Install and start Velero
 
 [Download][4] Velero
 
 Install Velero, including all prerequisites, into the cluster and start the deployment. This will create a namespace called `velero`, and place a deployment named `velero` in it.
 
+**If using IAM user and access key**:
+
 ```bash
 velero install \
     --provider aws \
     --bucket $BUCKET \
-    --secret-file ./credentials-velero \
     --backup-location-config region=$REGION \
-    --snapshot-location-config region=$REGION
+    --snapshot-location-config region=$REGION \
+    --secret-file ./credentials-velero
+```
+
+**If using kube2iam**:
+
+```bash
+velero install \
+    --provider aws \
+    --bucket $BUCKET \
+    --backup-location-config region=$REGION \
+    --snapshot-location-config region=$REGION \
+    --pod-annotations iam.amazonaws.com/role=arn:aws:iam::<AWS_ACCOUNT_ID>:role/<VELERO_ROLE_NAME> \
+    --no-secret
 ```
 
 Additionally, you can specify `--use-restic` to enable restic support, and `--wait` to wait for the deployment to be ready.
