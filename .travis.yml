@@ -3,4 +3,4 @@ language: go
 go:
   - 1.12.x
 
-script: make all-ci
+script: make ci
