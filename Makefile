@@ -34,7 +34,7 @@ local: build-dirs
 	GOARCH=$(GOARCH) \
 	PKG=$(PKG) \
 	BIN=$(BIN) \
-	OUTPUT_DIR=$$(pwd)/_output/bin/$(GOOS)/$(GOARCH) \
+	OUTPUT_DIR=$$(pwd)/_output \
 	./hack/build.sh
 
 # test runs unit tests using 'go test' in the local environment.
@@ -48,13 +48,13 @@ ci: test
 container:
 	docker build -t $(IMAGE):$(VERSION) .
 
-# push pushes the Docker image to its repository.
+# push pushes the Docker image to its registry.
 push:
 	@docker push $(IMAGE):$(VERSION)
 
 # build-dirs creates the necessary directories for a build in the local environment.
 build-dirs:
-	@mkdir -p _output/bin/$(GOOS)/$(GOARCH)
+	@mkdir -p _output
 
 # clean removes build artifacts from the local environment.
 clean:
