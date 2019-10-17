@@ -15,90 +15,48 @@
 PKG := github.com/vmware-tanzu/velero-plugin-for-aws
 BIN := velero-plugin-for-aws
 
-REGISTRY ?= carlisia
-IMAGE ?= $(REGISTRY)/plugin-for-aws
-BUILD_IMAGE ?= golang:1.12-stretch
+REGISTRY 	?= velero
+IMAGE 		?= $(REGISTRY)/velero-plugin-for-aws
+VERSION 	?= master
 
-# Which architecture to build - see $(ALL_ARCH) for options.
-# if the 'local' rule is being run, detect the ARCH from 'go env'
+# Which architecture to build.
+# if the 'local' rule is being run, detect the GOOS/GOARCH from 'go env'
 # if it wasn't specified by the caller.
-local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
-ARCH ?= linux-amd64
+local: GOOS ?= $(shell go env GOOS)
+GOOS ?= linux
 
-VERSION ?= master
+local: GOARCH ?= $(shell go env GOARCH)
+GOARCH ?= amd64
 
-platform_temp = $(subst -, ,$(ARCH))
-GOOS = $(word 1, $(platform_temp))
-GOARCH = $(word 2, $(platform_temp))
-
-all: $(addprefix build-, $(BIN))
-
-build-%:
-	$(MAKE) --no-print-directory BIN=$* build
-
+# local builds the binary using 'go build' in the local environment.
 local: build-dirs
 	GOOS=$(GOOS) \
 	GOARCH=$(GOARCH) \
 	PKG=$(PKG) \
 	BIN=$(BIN) \
-	OUTPUT_DIR=$$(pwd)/_output/bin/$(GOOS)/$(GOARCH) \
+	OUTPUT_DIR=$$(pwd)/_output \
 	./hack/build.sh
 
-build: _output/bin/$(GOOS)/$(GOARCH)/$(BIN) ./$(BIN)
+# test runs unit tests using 'go test' in the local environment.
+test:
+	CGO_ENABLED=0 go test -v -timeout 60s ./...
 
-_output/bin/$(GOOS)/$(GOARCH)/$(BIN): build-dirs
-	@echo "building: $@"
-	$(MAKE) shell CMD="-c '\
-		GOOS=$(GOOS) \
-		GOARCH=$(GOARCH) \
-		PKG=$(PKG) \
-		BIN=$(BIN) \
-		OUTPUT_DIR=/output/$(GOOS)/$(GOARCH) \
-		./hack/build.sh'"
+# ci is a convenience target for CI builds.
+ci: test
 
-TTY := $(shell tty -s && echo "-t")
+# container builds a Docker image containing the binary.
+container:
+	docker build -t $(IMAGE):$(VERSION) .
 
-shell: build-dirs
-	@echo "running docker: $@"
-	@docker run \
-		-e GOFLAGS \
-		-i $(TTY) \
-		--rm \
-		-u $$(id -u):$$(id -g) \
-		-v $$(pwd)/.go/pkg:/go/pkg \
-		-v $$(pwd)/.go/src:/go/src \
-		-v $$(pwd)/.go/std:/go/std \
-		-v $$(pwd):/go/src/$(PKG) \
-		-v $$(pwd)/.go/std/$(GOOS)_$(GOARCH):/usr/local/go/pkg/$(GOOS)_$(GOARCH)_static \
-		-v "$$(pwd)/.go/go-build:/.cache/go-build:delegated" \
-		-e CGO_ENABLED=0 \
-		-w /go/src/$(PKG) \
-		$(BUILD_IMAGE) \
-		go build -installsuffix "static" -i -v -o _output/bin/$(GOOS)/$(GOARCH)/$(BIN) ./$(BIN)
-
-build-dirs:
-	@mkdir -p _output/bin/$(GOOS)/$(GOARCH)
-	@mkdir -p .go/src/$(PKG) .go/pkg .go/bin .go/std/$(GOOS)/$(GOARCH) .go/go-build
-
-container: all
-	cp Dockerfile _output/bin/$(GOOS)/$(GOARCH)/Dockerfile
-	docker build -t $(IMAGE):$(VERSION) -f _output/bin/$(GOOS)/$(GOARCH)/Dockerfile _output/bin/$(GOOS)/$(GOARCH)
-	
+# push pushes the Docker image to its registry.
 push:
 	@docker push $(IMAGE):$(VERSION)
 
-container-name:
-	@echo "container: $(IMAGE):$(VERSION)"
+# build-dirs creates the necessary directories for a build in the local environment.
+build-dirs:
+	@mkdir -p _output
 
-all-ci: $(addprefix ci-, $(BIN))
-
-ci-%:
-	$(MAKE) --no-print-directory BIN=$* ci
-
-ci:
-	mkdir -p _output
-	CGO_ENABLED=0 go test -v -timeout 60s ./...
-
+# clean removes build artifacts from the local environment.
 clean:
 	@echo "cleaning"
-	rm -rf .go _output
+	rm -rf _output
