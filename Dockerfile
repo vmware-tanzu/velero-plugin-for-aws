@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.12-stretch AS build
+FROM golang:1.13-buster AS build
 WORKDIR /go/src/github.com/vmware-tanzu/velero-plugin-for-aws
 # copy vendor in separately so the layer can be cached if the contents don't change
 COPY vendor vendor
