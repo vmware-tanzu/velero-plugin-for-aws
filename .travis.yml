@@ -1,6 +1,19 @@
 language: go
 
 go:
-  - 1.13.x
+- 1.13.x
 
 script: make ci
+
+deploy:
+- provider: script
+  skip_cleanup: true
+  script: hack/docker-push.sh
+  on:
+    repo: vmware-tanzu/velero-plugin-for-aws
+    all_branches: true
+env:
+  global:
+  # generated using `travis encrypt`: https://docs.travis-ci.com/user/environment-variables#encrypting-environment-variables
+  - secure: P14jf0U6exXz0j11VO7u3j2snEIyafdq3ZxoExVbc65A8c5/jfxsIEjrQt8wECAUzGQcKIn9AGMqh5rzYAfzmQPa5kTgjm7xCIgoDK2w2kj3MBBPG3T6o0Plccvztf1BTC6fzyXKFXV9yKkx61a62DbhitLc9V5kujOmE+6EzrBnvGNX67FxhnhPfdiwXNCrS+86cuCe8RW2xsdy2sQn+CbxgRtyHrBWkmEmfGrTmDra93Jwh42w3em7Ckp1j7CJ3V1qJcj+qqCH1TBKEEgVbeoiGn/0uQBzp2h1UZd+MnVC+q9EXvSMKXWLXBMHaUo33gJvwg13xQcxNQtWesZWjc67D8M1Z3Tgiij9vGrsv/OoDa1tdu8TsX5iXpQyMbDA85gL3s1BjWhaashj2gDAd19m8ZcK2+ODrIVhXwU7+YHj9uyLuGdpOCrAzIfztGekw+as2bcDS51quEGZarndcgtVRuln/dZIof9+OhXrql6k5IJyn0ZKGHt+5FABTfZgUdugvv9cEcOez1JSmiVj33rdn3UfGHnvgb3xpQVec/ig+svMBQRtqbu0MhtcbsScJKztRArcrwShGL861eZjrafjzBup/kogg+wH+1iUAMB1xltOhYSw1KHodpJ0+cWQrlqKtZyxAJ7E+M88amA6doI0b/Jm2Btv3T+gcmjx7ck=
+  - secure: pZFUcGSfG8206PUH0Rdq6bXz7PpiAx4t+Z32qfgZaS5Wa/oZyr6cq83VXqXvH3wit+z150BugzkSSPrDiEMsy3qZy9COIh+gpuUZ2PnkodPtOMmjmY739JeBNSgdaLUy4pcR2nNfQbJ0zoS8tFLlAyXlvhpozooyBGY5/rMUzoukQs+9Z/W7gSZ/r/f3yCdVFfI07RVBxsI5h6atP7hQ8UCn3dRnWoOV5mJcUao+0EZTsDH4BvSxhK2rFfZUqX5NbDz+zfrSD9AmeS/rYzsZnwQQV9KDW9JFXiY8sKBtmopTccCeBzbamILsVNonk1l0qXR86Hi5rJJ0BCd5wq69qKp9NspgahLlh2nQR47MRYkzxlf2MLFxBxtpxvPi+MvP/LiLGyVBQVlYXhNfda4F31cqe0ZvvVGrwKOQFlzDnunyEUbJZOi9Aa2lKvDpk6VFUP4uBVPkYmM7mpDCGeulo77EjakMFcroOwxhV8/B3NIETmWnzWm2yWtZl/MZu11QdS7TJ8oR+ujLEKWUfCFAjsVzOU5SVd90bYjfFmeUJREKDLPGqBchWuMtfBflDV/VoTjm5gfXJxXaVhjn885v4DDRXsIPXqcDZmtDwb+ofjF+u8kDkkN6hA9eXtzsN/C/77srSmZEdeIsyA90WHxNGG5BYw63Qcbr0TFGe/TeUI8=
