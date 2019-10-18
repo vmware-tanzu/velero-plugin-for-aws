@@ -47,8 +47,8 @@ function highest_release() {
     done
 }
 
-if [[ "$BRANCH" == "master" ]]; then
-    VERSION="$BRANCH"
+if [[ "$TRAVIS_BRANCH" == "master" ]]; then
+    VERSION="$TRAVIS_BRANCH"
 elif [[ ! -z "$TRAVIS_TAG" ]]; then
     # Tags aren't fetched by Travis on checkout, and we don't need them for master
     git fetch --tags
@@ -63,7 +63,7 @@ fi
 
 # Assume we're not tagging `latest` by default, and never on master.
 TAG_LATEST=false
-if [[ "$BRANCH" == "master" ]]; then
+if [[ "$TRAVIS_BRANCH" == "master" ]]; then
     echo "Building master, not tagging latest."
 elif [[ "$TRAVIS_TAG" == "$HIGHEST" ]]; then
     TAG_LATEST=true
@@ -71,7 +71,7 @@ fi
 
 # Debugging info
 echo "Highest tag found: $HIGHEST"
-echo "BRANCH: $BRANCH"
+echo "TRAVIS_BRANCH: $TRAVIS_BRANCH"
 echo "TRAVIS_TAG: $TRAVIS_TAG"
 echo "TAG_LATEST: $TAG_LATEST"
 
