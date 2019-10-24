@@ -240,6 +240,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
+    --plugins velero/velero-plugin-for-aws:v1.0.0-beta.1 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -251,6 +252,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
+    --plugins velero/velero-plugin-for-aws:v1.0.0-beta.1 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -301,7 +303,7 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Velero
 [3]: #Install-and-start-Velero
-[4]: https://velero.io/docs/master/install-overview/
+[4]: https://velero.io/docs/master/install-overview/#install-the-cli
 [5]: #Migrating-PVs-across-clusters
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
 [7]: backupstoragelocation.md#aws
