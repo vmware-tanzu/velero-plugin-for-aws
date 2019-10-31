@@ -12,9 +12,9 @@ This repository contains these plugins to support running Velero on AWS:
 
 Below is a listing of plugin versions and respective Velero versions that are compatible.
 
-| Provider     | Plugin Version  | Velero Version |
-|--------------|-----------------|----------------|
-| AWS          | v1.0.0          | v1.2.0         |
+| Plugin Version  | Velero Version |
+|-----------------|----------------|
+| v1.0.0          | v1.2.0         |
 
 
 ## Setup
