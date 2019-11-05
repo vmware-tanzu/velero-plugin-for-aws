@@ -1,10 +1,27 @@
-# Volume Snapshot Location Configurable Parameters
+# Volume Snapshot Location
 
-The AWS plugin supports several configurable parameters when defining a `VolumeSnapshotLocation`. These should be provided as key-value pairs to the `velero install` command's `--snapshot-location-config` flag, or under the `VolumeSnapshotLocation's` `spec.config` field.
+The following sample AWS `VolumeSnapshotLocation` YAML shows all of the configurable parameters. The items under `spec.config` can be provided as key-value pairs to the `velero install` command's `--snapshot-location-config` flag -- for example, `region=us-east-1,profile=secondary,...`.
 
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `region` | string | Empty | *Example*: "us-east-1"<br><br>See [AWS documentation][0] for the full list.<br><br>Required. |
-| `profile` | string | "default" | AWS profile within the credential file to use for given store |
+```yaml
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: aws-default
+  namespace: velero
+spec:
+  # Name of the volume snapshotter plugin to use to connect to this location.
+  #
+  # Required.
+  provider: velero.io/aws
+  
+  config:
+    # The AWS region where the volumes/snapshots are located.
+    #
+    # Required.
+    region: us-east-1
 
-[0]: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions
+    # AWS profile within the credentials file to use for the volume snapshot location.
+    # 
+    # Optional (defaults to "default").
+    profile: "default"
+```
