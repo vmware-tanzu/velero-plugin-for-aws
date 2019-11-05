@@ -1,47 +1,10 @@
-# Velero Volume Snapshot Location
+# Volume Snapshot Location Configurable Parameters
 
-## Volume Snapshot Location
-
-A volume snapshot location is the location in which to store the volume snapshots created for a backup.
-
-Velero can be configured to take snapshots of volumes from multiple providers. Velero also allows you to configure multiple possible `VolumeSnapshotLocation` per provider, although you can only select one location per provider at backup time.
-
-Each VolumeSnapshotLocation describes a provider + location. These are represented in the cluster via the `VolumeSnapshotLocation` CRD. Velero must have at least one `VolumeSnapshotLocation` per cloud provider.
-
-A sample YAML `VolumeSnapshotLocation` looks like the following:
-
-```yaml
-apiVersion: velero.io/v1
-kind: VolumeSnapshotLocation
-metadata:
-  name: aws-default
-  namespace: velero
-spec:
-  provider: aws
-  config:
-    region: us-west-2
-    profile: "default"
-```
-
-### Parameter Reference
-
-The configurable parameters are as follows:
-
-#### Main config parameters
+The AWS plugin supports several configurable parameters when defining a `VolumeSnapshotLocation`. These should be provided as key-value pairs to the `velero install` command's `--snapshot-location-config` flag, or under the `VolumeSnapshotLocation's` `spec.config` field.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `provider` | String `aws`. | Required Field | The name of the AWS cloud provider which will be used to actually store the volume. |
-| `config` | See the corresponding [AWS-specific][0] configs or the provider's documentation.
-
-#### AWS
-
-##### config
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `region` | string | Empty | *Example*: "us-east-1"<br><br>See [AWS documentation][3] for the full list.<br><br>Required. |
+| `region` | string | Empty | *Example*: "us-east-1"<br><br>See [AWS documentation][0] for the full list.<br><br>Required. |
 | `profile` | string | "default" | AWS profile within the credential file to use for given store |
 
-[0]: #aws
-[3]: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions
+[0]: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions
