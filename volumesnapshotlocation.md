@@ -1,14 +1,6 @@
-# Velero Volume Snapshot Location
+# Volume Snapshot Location
 
-## Volume Snapshot Location
-
-A volume snapshot location is the location in which to store the volume snapshots created for a backup.
-
-Velero can be configured to take snapshots of volumes from multiple providers. Velero also allows you to configure multiple possible `VolumeSnapshotLocation` per provider, although you can only select one location per provider at backup time.
-
-Each VolumeSnapshotLocation describes a provider + location. These are represented in the cluster via the `VolumeSnapshotLocation` CRD. Velero must have at least one `VolumeSnapshotLocation` per cloud provider.
-
-A sample YAML `VolumeSnapshotLocation` looks like the following:
+The following sample AWS `VolumeSnapshotLocation` YAML shows all of the configurable parameters. The items under `spec.config` can be provided as key-value pairs to the `velero install` command's `--snapshot-location-config` flag -- for example, `region=us-east-1,profile=secondary,...`.
 
 ```yaml
 apiVersion: velero.io/v1
@@ -17,31 +9,19 @@ metadata:
   name: aws-default
   namespace: velero
 spec:
-  provider: aws
+  # Name of the volume snapshotter plugin to use to connect to this location.
+  #
+  # Required.
+  provider: velero.io/aws
+  
   config:
-    region: us-west-2
+    # The AWS region where the volumes/snapshots are located.
+    #
+    # Required.
+    region: us-east-1
+
+    # AWS profile within the credentials file to use for the volume snapshot location.
+    # 
+    # Optional (defaults to "default").
     profile: "default"
 ```
-
-### Parameter Reference
-
-The configurable parameters are as follows:
-
-#### Main config parameters
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `provider` | String `aws`. | Required Field | The name of the AWS cloud provider which will be used to actually store the volume. |
-| `config` | See the corresponding [AWS-specific][0] configs or the provider's documentation.
-
-#### AWS
-
-##### config
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `region` | string | Empty | *Example*: "us-east-1"<br><br>See [AWS documentation][3] for the full list.<br><br>Required. |
-| `profile` | string | "default" | AWS profile within the credential file to use for given store |
-
-[0]: #aws
-[3]: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions
