@@ -51,6 +51,10 @@ container:
 # push pushes the Docker image to its registry.
 push:
 	@docker push $(IMAGE):$(VERSION)
+	ifeq ($(TAG_LATEST), true)
+		docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
+		docker push $(IMAGE):latest
+	endif
 
 # build-dirs creates the necessary directories for a build in the local environment.
 build-dirs:
