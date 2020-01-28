@@ -312,7 +312,7 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Velero
 [3]: #Install-and-start-Velero
-[4]: https://velero.io/docs/master/install-overview/#install-the-cli
+[4]: https://velero.io/docs/v1.2.0/basic-install/
 [5]: #Migrating-PVs-across-clusters
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
 [7]: backupstoragelocation.md
