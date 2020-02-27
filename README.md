@@ -318,6 +318,10 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
     aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=key,Values=KubernetesCluster"
     ```
 
+### Overriding AWS Availability Zone (optional)
+
+Add the environment variable `VELERO_AWS_AZ_OVERRIDE` under `spec.template.spec.env` to force EBS volumes to be restored into the provided AWS availability zone.
+This is helpful when migrating persistent volumes across clusters, as by default Velero will restore them into the AZ that the original EBS volume resided in.
 
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Velero

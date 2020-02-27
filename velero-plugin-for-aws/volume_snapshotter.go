@@ -104,6 +104,12 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 		return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
 	}
 
+	overrideAZ := os.Getenv(envAZOverride)
+	if overrideAZ != "" {
+		b.log.Infof("variable %s found, restoring volume from snapshot in: %s", envAZOverride, overrideAZ)
+		volumeAZ = overrideAZ
+	}
+
 	// filter tags through getTagsForCluster() function in order to apply
 	// proper ownership tags to restored volumes
 	req := &ec2.CreateVolumeInput{
