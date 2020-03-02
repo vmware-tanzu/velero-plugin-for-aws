@@ -14,6 +14,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version  | Velero Version |
 |-----------------|----------------|
+| v1.0.x          | v1.3.0         |
 | v1.0.x          | v1.2.0         |
 
 
@@ -275,7 +276,7 @@ Additionally, you can specify `--use-restic` to enable restic support, and `--wa
 
 (Optional) Specify [additional configurable parameters][8] for the `--snapshot-location-config` flag.
 
-(Optional) Specify [CPU and memory resource requests and limits][9] for the Velero/restic pods.
+(Optional) [Customize the Velero installation][9] further to meet your needs.
 
 For more complex installation needs, use either the Helm chart, or add `--dry-run -o yaml` options for generating the YAML representation for the installation.
 
@@ -312,11 +313,11 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Velero
 [3]: #Install-and-start-Velero
-[4]: https://velero.io/docs/v1.2.0/basic-install/
+[4]: https://velero.io/docs/install-overview/
 [5]: #Migrating-PVs-across-clusters
 [6]: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html
 [7]: backupstoragelocation.md
 [8]: volumesnapshotlocation.md
-[9]: https://velero.io/docs/master/install-requirements
+[9]: https://velero.io/docs/customize-installation/
 [10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
-[11]: https://velero.io/docs/master/faq/
+[11]: https://velero.io/docs/faq/
