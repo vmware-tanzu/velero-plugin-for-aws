@@ -14,7 +14,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version  | Velero Version |
 |-----------------|----------------|
-| v1.0.x          | v1.3.0         |
+| v1.0.x          | v1.3.x         |
 | v1.0.x          | v1.2.0         |
 
 
