@@ -48,7 +48,7 @@ type VolumeSnapshotter struct {
 	ec2 *ec2.EC2
 }
 
-// takes AWS config to create a new session
+// takes AWS session options to create a new session
 func getSession(options session.Options) (*session.Session, error) {
 	sess, err := session.NewSessionWithOptions(options)
 	if err != nil {
