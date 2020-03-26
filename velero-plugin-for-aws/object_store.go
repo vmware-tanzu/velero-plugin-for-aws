@@ -22,12 +22,14 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -47,6 +49,7 @@ const (
 	credentialProfileKey     = "profile"
 	serverSideEncryptionKey  = "serverSideEncryption"
 	insecureSkipTLSVerifyKey = "insecureSkipTLSVerify"
+	caCertKey                = "caCert"
 )
 
 type s3Interface interface {
@@ -110,6 +113,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		// doesn't need to be explicitly set by the user within
 		// config.
 		bucket                = config[bucketKey]
+		caCert                = config[caCertKey]
 		s3ForcePathStyle      bool
 		insecureSkipTLSVerify bool
 		err                   error
@@ -151,7 +155,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	serverSession, err := getSession(serverConfig, credentialProfile)
+	sessionOptions := session.Options{Config: *serverConfig, Profile: credentialProfile}
+	if len(caCert) > 0 {
+		sessionOptions.CustomCABundle = strings.NewReader(caCert)
+	}
+	serverSession, err := getSession(sessionOptions)
 	if err != nil {
 		return err
 	}
@@ -173,7 +181,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		if err != nil {
 			return err
 		}
-		publicSession, err := getSession(publicConfig, credentialProfile)
+		sessionOptions := session.Options{Config: *publicConfig, Profile: credentialProfile}
+		if len(caCert) > 0 {
+			sessionOptions.CustomCABundle = strings.NewReader(caCert)
+		}
+		publicSession, err := getSession(sessionOptions)
 		if err != nil {
 			return err
 		}
