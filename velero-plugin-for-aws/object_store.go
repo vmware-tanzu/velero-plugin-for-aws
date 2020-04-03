@@ -144,9 +144,20 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	}
 
 	if insecureSkipTLSVerify {
+		defaultTransport := http.DefaultTransport.(*http.Transport)
 		serverConfig.HTTPClient = &http.Client{
+			// Copied from net/http
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				Proxy:                 defaultTransport.Proxy,
+				DialContext:           defaultTransport.DialContext,
+				MaxIdleConns:          defaultTransport.MaxIdleConns,
+				IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+				TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+				ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+				// Set insecureSkipVerify true
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
 			},
 		}
 	}
