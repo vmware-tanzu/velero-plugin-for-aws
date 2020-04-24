@@ -2,10 +2,11 @@
 
 
 [[projects]]
-  digest = "1:1091668d261d05b9a02fd0f2bc0ac5256043a0480f97fa098f3ea5d97ad6f2b1"
+  digest = "1:98b388c2ce691b2dcb1a4d489b9750b2a9378b728c662cc4515b10e0e5ae2df8"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
+    "aws/arn",
     "aws/awserr",
     "aws/awsutil",
     "aws/client",
@@ -23,6 +24,7 @@
     "aws/request",
     "aws/session",
     "aws/signer/v4",
+    "internal/context",
     "internal/ini",
     "internal/s3err",
     "internal/sdkio",
@@ -30,6 +32,8 @@
     "internal/sdkrand",
     "internal/sdkuri",
     "internal/shareddefaults",
+    "internal/strings",
+    "internal/sync/singleflight",
     "private/protocol",
     "private/protocol/ec2query",
     "private/protocol/eventstream",
@@ -42,14 +46,15 @@
     "private/protocol/xml/xmlutil",
     "service/ec2",
     "service/s3",
+    "service/s3/internal/arn",
     "service/s3/s3iface",
     "service/s3/s3manager",
     "service/sts",
     "service/sts/stsiface",
   ]
   pruneopts = "UT"
-  revision = "472ba41213bd699ff50a642b60afd89181d7bb9b"
-  version = "v1.25.6"
+  revision = "f0dfb79c0be6913c83c11458616813a5e6a559bd"
+  version = "v1.30.13"
 
 [[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
@@ -410,6 +415,7 @@
     "github.com/aws/aws-sdk-go/service/s3/s3manager",
     "github.com/pkg/errors",
     "github.com/sirupsen/logrus",
+    "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/mock",
     "github.com/stretchr/testify/require",
