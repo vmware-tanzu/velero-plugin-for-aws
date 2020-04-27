@@ -1,0 +1,1 @@
+Update AWS-SDK-GO version to a version containing support for connecting to regional and private VPC STS endpoints.
