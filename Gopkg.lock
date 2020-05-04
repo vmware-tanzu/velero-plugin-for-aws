@@ -224,7 +224,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:a453485a0d793767500cd76360882262dabe1bca80656a464094664a0f117295"
+  digest = "1:d8527961d8764eab2709e0b95db0e9ee009feaf876293c14458d52b79b731560"
   name = "github.com/vmware-tanzu/velero"
   packages = [
     "pkg/apis/velero/v1",
@@ -235,7 +235,7 @@
     "pkg/util/logging",
   ]
   pruneopts = "UT"
-  revision = "d868b71e299eca900d30e0aa47ade05eabd615ca"
+  revision = "577af5a5b1a64eaca79c89822bdf289cc249647e"
 
 [[projects]]
   branch = "master"
@@ -353,15 +353,15 @@
   version = "v2.2.4"
 
 [[projects]]
-  digest = "1:6b7e4dcfe4299e84936290d40679c5b817b24f8bef393a2cf6391ec101fc18d0"
+  digest = "1:38dfe7df00b979fbeb43d39512ff868b871429d9629e580c431e28a14e159210"
   name = "k8s.io/api"
   packages = ["core/v1"]
   pruneopts = "UT"
-  revision = "3544db3b9e4494309507e02eced5cd9dcff47e6a"
-  version = "kubernetes-1.15.3"
+  revision = "d3c87f2f52e31c74a4ccb065b706b688f4e6341d"
+  version = "kubernetes-1.17.4"
 
 [[projects]]
-  digest = "1:82aefa809ad4988dcbf0163b3f377be6a3baac6cddd8199af14b2a5683842ad6"
+  digest = "1:7888ee022a12846172e00f2f1f80a27135a97c667e17daeedbbd2c33a1530ec8"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/resource",
@@ -388,8 +388,8 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "f2f3a405f61d6c2cdc0d00687c1b5d90de91e9f0"
-  version = "kubernetes-1.15.3"
+  revision = "731dcecc205498f52a21b12e311af095efb4b188"
+  version = "kubernetes-1.17.4"
 
 [[projects]]
   digest = "1:93e82f25d75aba18436ad1ac042cb49493f096011f2541075721ed6f9e05c044"
