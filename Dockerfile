@@ -13,10 +13,8 @@
 # limitations under the License.
 
 FROM golang:1.13-buster AS build
-WORKDIR /go/src/github.com/vmware-tanzu/velero-plugin-for-aws
-# copy vendor in separately so the layer can be cached if the contents don't change
-COPY vendor vendor
-COPY velero-plugin-for-aws velero-plugin-for-aws
+COPY . /go/src/velero-plugin-for-aws
+WORKDIR /go/src/velero-plugin-for-aws
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
 
