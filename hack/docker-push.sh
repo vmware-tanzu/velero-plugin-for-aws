@@ -59,7 +59,8 @@ fi
 if [[ "$BRANCH" == "master" ]]; then
     VERSION="$BRANCH"
 elif [[ ! -z "$TAG" ]]; then
-    # Tags aren't fetched by Travis on checkout, and we don't need them for master
+    # Explicitly checkout tags when building from a git tag.
+    # This is not needed when building from master
     git fetch --tags
     # Calculate the latest release if there's a tag.
     highest_release
