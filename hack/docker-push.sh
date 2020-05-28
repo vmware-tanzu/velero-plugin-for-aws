@@ -20,8 +20,8 @@
 
 set +x
 
-if [[ -z "$TRAVIS" ]]; then
-    echo "This script is intended to be run only on Travis." >&2
+if [[ -z "$CI" ]]; then
+    echo "This script is intended to be run only on Github Actions." >&2
     exit 1
 fi
 
@@ -47,36 +47,41 @@ function highest_release() {
     done
 }
 
-if [[ "$TRAVIS_BRANCH" == "master" ]]; then
-    VERSION="$TRAVIS_BRANCH"
-elif [[ ! -z "$TRAVIS_TAG" ]]; then
+triggeredBy=$(echo $GITHUB_REF | cut -d / -f 2)
+if [[ "$triggeredBy" == "heads" ]]; then
+    BRANCH=$(echo $GITHUB_REF | cut -d / -f 3)
+    TAG=
+elif [[ "$triggeredBy" == "tags" ]]; then
+    BRANCH=
+    TAG=$(echo $GITHUB_REF | cut -d / -f 3)
+fi
+
+if [[ "$BRANCH" == "master" ]]; then
+    VERSION="$BRANCH"
+elif [[ ! -z "$TAG" ]]; then
     # Tags aren't fetched by Travis on checkout, and we don't need them for master
     git fetch --tags
     # Calculate the latest release if there's a tag.
     highest_release
-    VERSION="$TRAVIS_TAG"
+    VERSION="$TAG"
 else
-    # If we're not on master and we're not building a tag, exit early.
+    echo "We're not on master and we're not building a tag, exit early."
     exit 0
 fi
 
-
 # Assume we're not tagging `latest` by default, and never on master.
 TAG_LATEST=false
-if [[ "$TRAVIS_BRANCH" == "master" ]]; then
+if [[ "$BRANCH" == "master" ]]; then
     echo "Building master, not tagging latest."
-elif [[ "$TRAVIS_TAG" == "$HIGHEST" ]]; then
+elif [[ "$TAG" == "$HIGHEST" ]]; then
     TAG_LATEST=true
 fi
 
 # Debugging info
 echo "Highest tag found: $HIGHEST"
-echo "TRAVIS_BRANCH: $TRAVIS_BRANCH"
-echo "TRAVIS_TAG: $TRAVIS_TAG"
+echo "BRANCH: $BRANCH"
+echo "TAG: $TAG"
 echo "TAG_LATEST: $TAG_LATEST"
-
-echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-unset GIT_HTTP_USER_AGENT
 
 echo "Building and pushing container images."
 

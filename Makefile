@@ -45,11 +45,13 @@ test:
 ci: verify-modules test
 
 # container builds a Docker image containing the binary.
+.PHONY: container
 container:
 	docker build -t $(IMAGE):$(VERSION) .
 
 # push pushes the Docker image to its registry.
-push:
+.PHONY: push
+push: container
 	@docker push $(IMAGE):$(VERSION)
 ifeq ($(TAG_LATEST), true)
 	docker tag $(IMAGE):$(VERSION) $(IMAGE):latest

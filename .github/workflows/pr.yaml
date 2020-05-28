@@ -1,0 +1,14 @@
+name: Run CI
+on: [pull_request]
+jobs:
+
+  build:
+    name: Run CI
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Check out the code
+      uses: actions/checkout@v2
+
+    - name: Make CI
+      run: make ci
