@@ -1,3 +1,5 @@
+[![Build Status][101]][102]
+
 # Velero plugins for AWS
 
 ## Overview
@@ -14,6 +16,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version  | Velero Version |
 |-----------------|----------------|
+| v1.1.x          | v1.4.x         |
 | v1.0.x          | v1.3.x         |
 | v1.0.x          | v1.2.0         |
 
@@ -250,7 +253,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.0.1 \
+    --plugins velero/velero-plugin-for-aws:v1.1.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -262,7 +265,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.0.1 \
+    --plugins velero/velero-plugin-for-aws:v1.1.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -321,3 +324,5 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [9]: https://velero.io/docs/customize-installation/
 [10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
 [11]: https://velero.io/docs/faq/
+[101]: https://github.com/vmware-tanzu/velero-plugin-for-aws/workflows/Master%20CI/badge.svg
+[102]: https://github.com/vmware-tanzu/velero-plugin-for-aws/actions?query=workflow%3A"Master+CI"

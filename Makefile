@@ -74,17 +74,19 @@ test:
 	CGO_ENABLED=0 go test -v -timeout 60s ./...
 
 # ci is a convenience target for CI builds.
-ci: test
+ci: verify-modules test
 
 
 # container builds a Docker image containing the binary.
+.PHONY: container
 container:
 	docker build -t $(IMAGE):$(VERSION) -f $(DOCKERFILE) .
 	@echo "container: $(IMAGE):$(VERSION)"
 
 
 # push pushes the Docker image to its registry.
-push:
+.PHONY: push
+push: container
 	@docker push $(IMAGE):$(VERSION)
 	@echo "pushed: $(IMAGE):$(VERSION)"
 ifeq ($(TAG_LATEST), true)
@@ -110,6 +112,16 @@ endif
 # build-dirs creates the necessary directories for a build in the local environment.
 build-dirs:
 	@mkdir -p _output
+
+.PHONY: modules
+modules:
+	go mod tidy
+
+.PHONY: verify-modules
+verify-modules: modules
+	@if !(git diff --quiet HEAD -- go.sum go.mod); then \
+		echo "go module files are out of date, please commit the changes to go.mod and go.sum"; exit 1; \
+	fi
 
 # clean removes build artifacts from the local environment.
 clean:
