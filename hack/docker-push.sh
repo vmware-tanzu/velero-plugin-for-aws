@@ -86,4 +86,4 @@ echo "TAG_LATEST: $TAG_LATEST"
 
 echo "Building and pushing container images."
 
-VERSION="$VERSION" TAG_LATEST="$TAG_LATEST" make container push
+VERSION="$VERSION" TAG_LATEST="$TAG_LATEST" make all-containers all-push manifest
