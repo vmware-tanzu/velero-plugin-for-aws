@@ -324,5 +324,5 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [9]: https://velero.io/docs/customize-installation/
 [10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
 [11]: https://velero.io/docs/faq/
-[101]: https://github.com/vmware-tanzu/velero-plugin-for-aws/workflows/Master%20CI/badge.svg
-[102]: https://github.com/vmware-tanzu/velero-plugin-for-aws/actions?query=workflow%3A"Master+CI"
+[101]: https://github.com/vmware-tanzu/velero-plugin-for-aws/workflows/Main%20CI/badge.svg
+[102]: https://github.com/vmware-tanzu/velero-plugin-for-aws/actions?query=workflow%3A"Main+CI"
