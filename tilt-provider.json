@@ -1,0 +1,11 @@
+{
+  "name": "aws",
+  "config": {
+    "context": ".",
+    "image": "velero/velero-plugin-for-aws",
+    "live_reload_deps": [
+      "velero-plugin-for-aws"
+    ],
+    "go_main": "./velero-plugin-for-aws"
+  }
+}
