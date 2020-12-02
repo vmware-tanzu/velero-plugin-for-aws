@@ -17,4 +17,4 @@ debug
 *.diff
 .vs
 
-.tiltbuild
+_tiltbuild
