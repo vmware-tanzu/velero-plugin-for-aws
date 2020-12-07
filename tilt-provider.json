@@ -1,0 +1,9 @@
+{
+  "plugin_name": "velero-plugin-for-aws",
+  "context": ".",
+  "image": "velero/velero-plugin-for-aws",
+  "live_reload_deps": [
+    "velero-plugin-for-aws"
+  ],
+  "go_main": "./velero-plugin-for-aws"
+}

@@ -16,3 +16,5 @@ debug
 .vscode
 *.diff
 .vs
+
+_tiltbuild
