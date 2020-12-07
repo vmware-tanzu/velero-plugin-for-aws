@@ -10,6 +10,7 @@ This repository contains these plugins to support running Velero on AWS:
 
 - A volume snapshotter plugin for creating snapshots from volumes (during a backup) and volumes from snapshots (during a restore) on AWS EBS.
 
+
 ## Compatibility
 
 Below is a listing of plugin versions and respective Velero versions that are compatible.
@@ -20,6 +21,10 @@ Below is a listing of plugin versions and respective Velero versions that are co
 | v1.1.x          | v1.4.x         |
 | v1.0.x          | v1.3.x         |
 | v1.0.x          | v1.2.0         |
+
+## Filing issues
+
+If you would like to file a GitHub issue for the plugin, please open the issue on the [core Velero repo][103]
 
 
 ## Setup
@@ -327,3 +332,6 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [11]: https://velero.io/docs/faq/
 [101]: https://github.com/vmware-tanzu/velero-plugin-for-aws/workflows/Main%20CI/badge.svg
 [102]: https://github.com/vmware-tanzu/velero-plugin-for-aws/actions?query=workflow%3A"Main+CI"
+[103]: https://github.com/vmware-tanzu/velero/issues/new/choose
+
+
