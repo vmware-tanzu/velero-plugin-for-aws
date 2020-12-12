@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,6 +47,7 @@ const (
 	s3ForcePathStyleKey      = "s3ForcePathStyle"
 	bucketKey                = "bucket"
 	signatureVersionKey      = "signatureVersion"
+	credentialsFileKey       = "credentialsFile"
 	credentialProfileKey     = "profile"
 	serverSideEncryptionKey  = "serverSideEncryption"
 	insecureSkipTLSVerifyKey = "insecureSkipTLSVerify"
@@ -90,6 +92,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		kmsKeyIDKey,
 		s3ForcePathStyleKey,
 		signatureVersionKey,
+		credentialsFileKey,
 		credentialProfileKey,
 		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
@@ -105,6 +108,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		s3ForcePathStyleVal      = config[s3ForcePathStyleKey]
 		signatureVersion         = config[signatureVersionKey]
 		credentialProfile        = config[credentialProfileKey]
+		credentialsFile          = config[credentialsFileKey]
 		serverSideEncryption     = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal = config[insecureSkipTLSVerifyKey]
 
@@ -170,6 +174,15 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	if len(caCert) > 0 {
 		sessionOptions.CustomCABundle = strings.NewReader(caCert)
 	}
+	if credentialsFile != "" {
+		if _, err := os.Stat(credentialsFile); err != nil {
+			if os.IsNotExist(err) {
+				return errors.Wrapf(err, "provided credentialsFile does not exist")
+			}
+			return errors.Wrapf(err, "could not get credentialsFile info")
+		}
+		sessionOptions.SharedConfigFiles = []string{credentialsFile}
+	}
 	serverSession, err := getSession(sessionOptions)
 	if err != nil {
 		return err
@@ -195,6 +208,9 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		sessionOptions := session.Options{Config: *publicConfig, Profile: credentialProfile}
 		if len(caCert) > 0 {
 			sessionOptions.CustomCABundle = strings.NewReader(caCert)
+		}
+		if credentialsFile != "" {
+			sessionOptions.SharedConfigFiles = []string{credentialsFile}
 		}
 		publicSession, err := getSession(sessionOptions)
 		if err != nil {
