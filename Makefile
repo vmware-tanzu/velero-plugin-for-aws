@@ -1,4 +1,4 @@
-# Copyright 2017, 2019 the Velero contributors.
+# Copyright the Velero contributors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,53 +12,60 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# The binary to build (just the basename).
+BIN ?= velero-plugin-for-aws
+
+# This repo's root import path (under GOPATH).
 PKG := github.com/vmware-tanzu/velero-plugin-for-aws
-BIN := velero-plugin-for-aws
 
-REGISTRY 	?= velero
-VERSION 	?= main
+# Where to push the docker image.
+REGISTRY ?= velero
 
-CONTAINER_PLATFORMS ?= amd64 arm arm64 # ppc64le
+# Image name
+IMAGE ?= $(REGISTRY)/$(BIN)
 
-# Which architecture to build.
-# if the 'local' rule is being run, detect the GOOS/GOARCH from 'go env'
+# Which architecture to build - see $(ALL_ARCH) for options.
+# if the 'local' rule is being run, detect the ARCH from 'go env'
 # if it wasn't specified by the caller.
-local: GOOS ?= $(shell go env GOOS)
-GOOS ?= linux
+local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
+ARCH ?= linux-amd64
 
-local: GOARCH ?= $(shell go env GOARCH)
-GOARCH ?= amd64
+VERSION ?= main
 
-# Set default base image dynamically for each arch
-ifeq ($(GOARCH),amd64)
-		DOCKERFILE ?= Dockerfile
-endif
-ifeq ($(GOARCH),arm)
-		DOCKERFILE ?= Dockerfile-arm
-endif
-ifeq ($(GOARCH),arm64)
-		DOCKERFILE ?= Dockerfile-arm64
+TAG_LATEST ?= false
+
+ifeq ($(TAG_LATEST), true)
+    IMAGE_TAGS ?= $(IMAGE):$(VERSION) $(IMAGE):latest
+else
+    IMAGE_TAGS ?= $(IMAGE):$(VERSION)
 endif
 
+ifeq ($(shell docker buildx inspect 2>/dev/null | awk '/Status/ { print $$2 }'), running)
+    BUILDX_ENABLED ?= true
+else
+    BUILDX_ENABLED ?= false
+endif
 
-MULTIARCH_IMAGE = $(REGISTRY)/$(BIN)
-IMAGE ?= $(REGISTRY)/$(BIN)-$(GOARCH)
+define BUILDX_ERROR
+buildx not enabled, refusing to run this recipe
+see: https://velero.io/docs/main/build-from-source/#making-images-and-updating-velero for more info
+endef
+
+BUILDX_PLATFORMS ?= $(subst -,/,$(ARCH))
+BUILDX_OUTPUT_TYPE ?= docker
+
+###
+### These variables should not need tweaking.
+###
+
+platform_temp = $(subst -, ,$(ARCH))
+GOOS = $(word 1, $(platform_temp))
+GOARCH = $(word 2, $(platform_temp))
+GOPROXY ?= https://proxy.golang.org
 
 # If you want to build all containers, see the 'all-containers' rule.
-# If you want to build AND push all containers, see the 'all-push' rule.
-
-container-%:
-	@$(MAKE) --no-print-directory GOARCH=$* container
-
-push-%:
-	@$(MAKE) --no-print-directory GOARCH=$* push
-
-all-containers: $(addprefix container-, $(CONTAINER_PLATFORMS))
-
-all-push: $(addprefix push-, $(CONTAINER_PLATFORMS))
-
-all-manifests:
-	@$(MAKE) manifest
+all-containers:
+	@$(MAKE) --no-print-directory container
 
 # local builds the binary using 'go build' in the local environment.
 local: build-dirs
@@ -74,40 +81,19 @@ test:
 	CGO_ENABLED=0 go test -v -timeout 60s ./...
 
 # ci is a convenience target for CI builds.
-ci: verify-modules test
-
+ci: verify-modules test local
 
 # container builds a Docker image containing the binary.
-.PHONY: container
 container:
-	docker build -t $(IMAGE):$(VERSION) -f $(DOCKERFILE) .
+ifneq ($(BUILDX_ENABLED), true)
+    $(error $(BUILDX_ERROR))
+endif
+	@docker buildx build --pull \
+    --output=type=$(BUILDX_OUTPUT_TYPE) \
+    --platform $(BUILDX_PLATFORMS) \
+    $(addprefix -t , $(IMAGE_TAGS)) \
+    -f Dockerfile .
 	@echo "container: $(IMAGE):$(VERSION)"
-
-
-# push pushes the Docker image to its registry.
-.PHONY: push
-push: container
-	@docker push $(IMAGE):$(VERSION)
-	@echo "pushed: $(IMAGE):$(VERSION)"
-ifeq ($(TAG_LATEST), true)
-	docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
-	docker push $(IMAGE):latest
-	@echo "pushed: $(IMAGE):latest"
-endif
-
-
-manifest: 
-	DOCKER_CLI_EXPERIMENTAL=enabled docker manifest create $(MULTIARCH_IMAGE):$(VERSION) \
-		$(foreach arch, $(CONTAINER_PLATFORMS), $(MULTIARCH_IMAGE)-$(arch):$(VERSION))
-	@DOCKER_CLI_EXPERIMENTAL=enabled docker manifest push --purge $(MULTIARCH_IMAGE):$(VERSION)
-	@echo "pushed: $(MULTIARCH_IMAGE):$(VERSION)"
-ifeq ($(TAG_LATEST), true)
-	@DOCKER_CLI_EXPERIMENTAL=enabled docker manifest create $(MULTIARCH_IMAGE):latest \
-		$(foreach arch, $(CONTAINER_PLATFORMS), $(MULTIARCH_IMAGE)-$(arch):latest)
-	@DOCKER_CLI_EXPERIMENTAL=enabled docker manifest push --purge $(MULTIARCH_IMAGE):latest
-	@echo "pushed: $(MULTIARCH_IMAGE):latest)"
-endif
-
 
 # build-dirs creates the necessary directories for a build in the local environment.
 build-dirs:

@@ -1,4 +1,4 @@
-# Copyright 2017, 2019 the Velero contributors.
+# Copyright the Velero contributors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,14 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+FROM --platform=$BUILDPLATFORM golang:1.15 AS build
 
-FROM golang:1.13-buster AS build
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+ENV GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    GOARM=${TARGETVARIANT}
+
 COPY . /go/src/velero-plugin-for-aws
+
 WORKDIR /go/src/velero-plugin-for-aws
-RUN CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
+
+RUN export GOARM=$(echo "${GOARM}" | cut -c2-) && \
+    CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
 
-FROM ubuntu:bionic
+FROM ubuntu:focal
 RUN mkdir /plugins
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
 USER nobody:nogroup
