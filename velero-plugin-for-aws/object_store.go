@@ -17,12 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"io"
-	"net/http"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -100,116 +97,26 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		return err
 	}
 
-	var (
-		region                   = config[regionKey]
-		s3URL                    = config[s3URLKey]
-		publicURL                = config[publicURLKey]
-		kmsKeyID                 = config[kmsKeyIDKey]
-		s3ForcePathStyleVal      = config[s3ForcePathStyleKey]
-		signatureVersion         = config[signatureVersionKey]
-		credentialProfile        = config[credentialProfileKey]
-		credentialsFile          = config[credentialsFileKey]
-		serverSideEncryption     = config[serverSideEncryptionKey]
-		insecureSkipTLSVerifyVal = config[insecureSkipTLSVerifyKey]
-
-		// note that bucket is automatically added to the config map
-		// by the server from the ObjectStorageProviderConfig so
-		// doesn't need to be explicitly set by the user within
-		// config.
-		bucket                = config[bucketKey]
-		caCert                = config[caCertKey]
-		s3ForcePathStyle      bool
-		insecureSkipTLSVerify bool
-		err                   error
-	)
-
-	if s3ForcePathStyleVal != "" {
-		if s3ForcePathStyle, err = strconv.ParseBool(s3ForcePathStyleVal); err != nil {
-			return errors.Wrapf(err, "could not parse %s (expected bool)", s3ForcePathStyleKey)
-		}
-	}
-
-	// AWS (not an alternate S3-compatible API) and region not
-	// explicitly specified: determine the bucket's region
-	if s3URL == "" && region == "" {
-		var err error
-
-		region, err = GetBucketRegion(bucket)
-		if err != nil {
-			return err
-		}
-	}
-
-	serverConfig, err := newAWSConfig(s3URL, region, s3ForcePathStyle)
-	if err != nil {
+	s3Cfg := NewS3Config(config)
+	if err := s3Cfg.Init(); err != nil {
 		return err
 	}
 
-	if insecureSkipTLSVerifyVal != "" {
-		if insecureSkipTLSVerify, err = strconv.ParseBool(insecureSkipTLSVerifyVal); err != nil {
-			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
+	o.s3 = s3.New(s3Cfg.session)
+	o.s3Uploader = s3manager.NewUploader(s3Cfg.session)
+	o.kmsKeyID = s3Cfg.kmsKeyID
+	o.serverSideEncryption = s3Cfg.serverSideEncryption
+
+	if s3Cfg.signatureVersion != "" {
+		if !isValidSignatureVersion(s3Cfg.signatureVersion) {
+			return errors.Errorf("invalid signature version: %s", s3Cfg.signatureVersion)
 		}
+		o.signatureVersion = s3Cfg.signatureVersion
 	}
 
-	if insecureSkipTLSVerify {
-		defaultTransport := http.DefaultTransport.(*http.Transport)
-		serverConfig.HTTPClient = &http.Client{
-			// Copied from net/http
-			Transport: &http.Transport{
-				Proxy:                 defaultTransport.Proxy,
-				DialContext:           defaultTransport.DialContext,
-				MaxIdleConns:          defaultTransport.MaxIdleConns,
-				IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-				TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-				ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-				// Set insecureSkipVerify true
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-				},
-			},
-		}
-	}
-
-	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile)
-	if err != nil {
-		return err
-	}
-
-	serverSession, err := getSession(sessionOptions)
-	if err != nil {
-		return err
-	}
-
-	o.s3 = s3.New(serverSession)
-	o.s3Uploader = s3manager.NewUploader(serverSession)
-	o.kmsKeyID = kmsKeyID
-	o.serverSideEncryption = serverSideEncryption
-
-	if signatureVersion != "" {
-		if !isValidSignatureVersion(signatureVersion) {
-			return errors.Errorf("invalid signature version: %s", signatureVersion)
-		}
-		o.signatureVersion = signatureVersion
-	}
-
-	if publicURL != "" {
-		publicConfig, err := newAWSConfig(publicURL, region, s3ForcePathStyle)
-		if err != nil {
-			return err
-		}
-
-		publicSessionOptions, err := newSessionOptions(*publicConfig, credentialProfile, caCert, credentialsFile)
-		if err != nil {
-			return err
-		}
-
-		publicSession, err := getSession(publicSessionOptions)
-		if err != nil {
-			return err
-		}
-		o.preSignS3 = s3.New(publicSession)
-	} else {
-		o.preSignS3 = o.s3
+	o.preSignS3 = o.s3
+	if s3Cfg.publicSession != nil {
+		o.preSignS3 = s3.New(s3Cfg.publicSession)
 	}
 
 	return nil
