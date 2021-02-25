@@ -171,7 +171,9 @@ func (h *S3Config) getBucketRegion() (string, error) {
 		for regionHint := range partition.Regions() {
 			var err error
 			region, err = s3manager.GetBucketRegion(context.Background(), h.session, h.bucket, regionHint)
-			fErr = errors.Wrap(err, "")
+			if err != nil {
+				fErr = errors.Wrap(fErr, err.Error())
+			}
 			// we only need to try a single region hint per partition, so break after the first
 			break
 		}
@@ -195,4 +197,17 @@ func IsValidS3URLScheme(s3URL string) bool {
 		return false
 	}
 	return true
+}
+
+// takes AWS session options to create a new session
+func getSession(options session.Options) (*session.Session, error) {
+	sess, err := session.NewSessionWithOptions(options)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if _, err := sess.Config.Credentials.Get(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return sess, nil
 }

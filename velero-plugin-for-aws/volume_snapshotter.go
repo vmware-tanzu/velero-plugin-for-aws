@@ -48,19 +48,6 @@ type VolumeSnapshotter struct {
 	ec2 *ec2.EC2
 }
 
-// takes AWS session options to create a new session
-func getSession(options session.Options) (*session.Session, error) {
-	sess, err := session.NewSessionWithOptions(options)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	if _, err := sess.Config.Credentials.Get(); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	return sess, nil
-}
-
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 	return &VolumeSnapshotter{log: logger}
 }
@@ -70,6 +57,8 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return err
 	}
 
+	// region and profile are 'Required' fields in the VolumeSnapshot CR,
+	// hence it is safe to assume that they will be present in the config and we dont have to find it on the runtime
 	region := config[regionKey]
 	credentialProfile := config[credentialProfileKey]
 	if region == "" {
