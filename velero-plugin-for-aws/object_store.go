@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2019 the Velero contributors.
+Copyright the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -170,19 +170,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	sessionOptions := session.Options{Config: *serverConfig, Profile: credentialProfile}
-	if len(caCert) > 0 {
-		sessionOptions.CustomCABundle = strings.NewReader(caCert)
+	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile)
+	if err != nil {
+		return err
 	}
-	if credentialsFile != "" {
-		if _, err := os.Stat(credentialsFile); err != nil {
-			if os.IsNotExist(err) {
-				return errors.Wrapf(err, "provided credentialsFile does not exist")
-			}
-			return errors.Wrapf(err, "could not get credentialsFile info")
-		}
-		sessionOptions.SharedConfigFiles = []string{credentialsFile}
-	}
+
 	serverSession, err := getSession(sessionOptions)
 	if err != nil {
 		return err
@@ -205,14 +197,13 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		if err != nil {
 			return err
 		}
-		sessionOptions := session.Options{Config: *publicConfig, Profile: credentialProfile}
-		if len(caCert) > 0 {
-			sessionOptions.CustomCABundle = strings.NewReader(caCert)
+
+		publicSessionOptions, err := newSessionOptions(*publicConfig, credentialProfile, caCert, credentialsFile)
+		if err != nil {
+			return err
 		}
-		if credentialsFile != "" {
-			sessionOptions.SharedConfigFiles = []string{credentialsFile}
-		}
-		publicSession, err := getSession(sessionOptions)
+
+		publicSession, err := getSession(publicSessionOptions)
 		if err != nil {
 			return err
 		}
@@ -222,6 +213,29 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	}
 
 	return nil
+}
+
+// newSessionOptions creates a session.Options with the given config and profile. If
+// caCert and credentialsFile are provided, these will be used for the CustomCABundle
+// and the credentials for the session.
+func newSessionOptions(config aws.Config, profile string, caCert string, credentialsFile string) (session.Options, error) {
+	sessionOptions := session.Options{Config: config, Profile: profile}
+
+	if len(caCert) > 0 {
+		sessionOptions.CustomCABundle = strings.NewReader(caCert)
+	}
+
+	if credentialsFile != "" {
+		if _, err := os.Stat(credentialsFile); err != nil {
+			if os.IsNotExist(err) {
+				return session.Options{}, errors.Wrapf(err, "provided credentialsFile does not exist")
+			}
+			return session.Options{}, errors.Wrapf(err, "could not get credentialsFile info")
+		}
+		sessionOptions.SharedConfigFiles = []string{credentialsFile}
+	}
+
+	return sessionOptions, nil
 }
 
 func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) {
