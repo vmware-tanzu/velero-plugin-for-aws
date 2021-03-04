@@ -221,7 +221,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 func newSessionOptions(config aws.Config, profile string, caCert string, credentialsFile string) (session.Options, error) {
 	sessionOptions := session.Options{Config: config, Profile: profile}
 
-	if len(caCert) > 0 {
+	if caCert != "" {
 		sessionOptions.CustomCABundle = strings.NewReader(caCert)
 	}
 
