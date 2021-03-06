@@ -34,7 +34,8 @@ To set up Velero on AWS, you:
 * [Create an S3 bucket][1]
 * [Set permissions for Velero][2]
 * [Install and start Velero][3]
-* [Migrating PVs across clusters][5]
+
+You can also use this plugin to [migrate PVs across clusters][5] or create an additional [Backup Storage Location][12].
 
 If you do not have the `aws` CLI locally installed, follow the [user guide][6] to set it up.
 
@@ -289,6 +290,52 @@ Additionally, you can specify `--use-restic` to enable restic support, and `--wa
 
 For more complex installation needs, use either the Helm chart, or add `--dry-run -o yaml` options for generating the YAML representation for the installation.
 
+## Create an additional Backup Storage Location
+
+If you are using Velero v1.6.0 or later, you can create additional AWS [Backup Storage Locations][13] that use their own credentials.
+These can also be created alongside Backup Storage Locations that use other providers.
+
+### Limitations
+It is not possible to use different credentials for additional Backup Storage Locations if you are pod based authentication such as [kube2iam][14].
+
+### Prerequisites
+
+* Velero 1.6.0 or later
+* AWS plugin must be installed, either at install time, or by running `velero plugin install velero/velero-plugin-for-aws:v1.2.0`
+
+### Configure S3 bucket and credentials
+
+To configure a new Backup Storage Location with its own credentials, it is necessary to follow the steps above to [create the bucket to use][15] and to [generate the credentials file][16] to interact with that bucket.
+Once you have created the credentials file, create a [Kubernetes Secret][17] in the Velero namespace that contains these credentials:
+
+```bash
+kubectl create secret generic -n velero bsl-credentials --from-file=aws=</path/to/credentialsfile>
+```
+
+This will create a secret named `bsl-credentials` with a single key (`aws`) which contains the contents of your credentials file.
+The name and key of this secret will be given to Velero when creating the Backup Storage Location, so it knows which secret data to use.
+
+### Create Backup Storage Location
+
+Once the bucket and credentials have been configured, these can be used to create the new Backup Storage Location:
+
+```bash
+velero backup-location create <bsl-name> \
+  --provider aws \
+  --bucket $BUCKET \
+  --config region=$REGION \
+  --credential=bsl-credentials=aws
+```
+
+The Backup Storage Location is ready to use when it has the phase `Available`.
+You can check this with the following command:
+
+```bash
+velero backup-location get
+```
+
+To use this new Backup Storage Location when performing a backup, use the flag `--storage-location <bsl-name>` when running `velero backup create`.
+
 ## Migrating PVs across clusters
 
 ### Setting AWS_CLUSTER_NAME (Optional)
@@ -330,6 +377,12 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
 [9]: https://velero.io/docs/customize-installation/
 [10]: http://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html
 [11]: https://velero.io/docs/faq/
+[12]: #Create-an-additional-Backup-Storage-Location
+[13]: https://velero.io/docs/latest/api-types/backupstoragelocation/
+[14]: #option-2-set-permissions-using-kube2iam
+[15]: #create-s3-bucket
+[16]: #option-1-set-permissions-with-an-iam-user
+[17]: https://kubernetes.io/docs/concepts/configuration/secret/
 [101]: https://github.com/vmware-tanzu/velero-plugin-for-aws/workflows/Main%20CI/badge.svg
 [102]: https://github.com/vmware-tanzu/velero-plugin-for-aws/actions?query=workflow%3A"Main+CI"
 [103]: https://github.com/vmware-tanzu/velero/issues/new/choose
