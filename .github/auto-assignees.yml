@@ -1,0 +1,26 @@
+---
+# This assigns a PR to its author
+addAssignees: author
+
+reviewers:
+  # The default reviewers
+  defaults:
+    - maintainers
+
+  groups:
+    maintainers:
+      - ashish-amarnath
+      - carlisia
+      - zubron
+      - dsu-igeek
+      - jenting
+      - sseago
+
+options:
+  ignore_draft: true
+  ignored_keywords:
+    - WIP
+    - wip
+    - DO NOT MERGE
+  enable_group_assignment: true
+  number_of_reviewers: 2
