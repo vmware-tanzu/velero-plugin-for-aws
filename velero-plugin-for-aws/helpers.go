@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -39,6 +38,7 @@ type S3Config struct {
 	s3ForcePathStyleVal      string
 	signatureVersion         string
 	credentialProfile        string
+	credentialsFile          string
 	serverSideEncryption     string
 	insecureSkipTLSVerifyVal string
 	bucket                   string
@@ -57,6 +57,7 @@ func NewS3Config(cfg map[string]string) *S3Config {
 		s3ForcePathStyleVal:      cfg[s3ForcePathStyleKey],
 		signatureVersion:         cfg[signatureVersionKey],
 		credentialProfile:        cfg[credentialProfileKey],
+		credentialsFile:          cfg[credentialsFileKey],
 		serverSideEncryption:     cfg[serverSideEncryptionKey],
 		insecureSkipTLSVerifyVal: cfg[insecureSkipTLSVerifyKey],
 		bucket:                   cfg[bucketKey],
@@ -65,7 +66,7 @@ func NewS3Config(cfg map[string]string) *S3Config {
 }
 
 // Init initializes the S3 config parameters which needs to be fetched/prepared based on the passed options
-func (h *S3Config) Init() error {
+func (s *S3Config) Init() error {
 	// AWS (not an alternate S3-compatible API) and region not
 	// explicitly specified: determine the bucket's region
 	var (
@@ -73,38 +74,58 @@ func (h *S3Config) Init() error {
 		insecureSkipTLSVerify bool
 		err                   error
 	)
-	if h.s3ForcePathStyleVal != "" {
-		if s3ForcePathStyle, err = strconv.ParseBool(h.s3ForcePathStyleVal); err != nil {
+
+	if s.s3ForcePathStyleVal != "" {
+		if s3ForcePathStyle, err = strconv.ParseBool(s.s3ForcePathStyleVal); err != nil {
 			return errors.Wrapf(err, "could not parse %s (expected bool)", s3ForcePathStyleKey)
 		}
 	}
 
 	// prepares the AWS Sessions with the session-config having only known parameters.
 	// Any unknown or derived params will be added further to the initialization
-	if err = h.initAWSSessions(s3ForcePathStyle); err != nil {
+	if err = s.initAWSSessions(s3ForcePathStyle); err != nil {
 		return errors.Wrap(err, "could not initialize AWS session")
 	}
 
 	// add region to the session config
-	if h.s3URL == "" && h.region == "" {
-		h.region, err = h.getBucketRegion()
-		if err != nil {
-			return err
+	if s.s3URL == "" && s.region == "" {
+		var region string
+		var fErr error
+
+		for _, partition := range endpoints.DefaultPartitions() {
+			for regionHint := range partition.Regions() {
+				var err error
+				region, err = s3manager.GetBucketRegion(context.Background(), s.session, s.bucket, regionHint)
+				if err != nil {
+					fErr = errors.Wrap(fErr, err.Error())
+				}
+				// we only need to try a single region hint per partition, so break after the first
+				break
+			}
+
+			if region != "" {
+				s.region = region
+				break
+			}
 		}
 
-		h.session.Config = h.session.Config.WithRegion(h.region)
+		if region == "" {
+			return errors.Wrap(fErr, "unable to determine bucket's region")
+		}
+
+		s.session.Config = s.session.Config.WithRegion(s.region)
 	}
 
 	// add insecure flag to the http transport config in http client and add it to the session config
-	if h.insecureSkipTLSVerifyVal != "" {
-		if insecureSkipTLSVerify, err = strconv.ParseBool(h.insecureSkipTLSVerifyVal); err != nil {
+	if s.insecureSkipTLSVerifyVal != "" {
+		if insecureSkipTLSVerify, err = strconv.ParseBool(s.insecureSkipTLSVerifyVal); err != nil {
 			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
 		}
 	}
 
 	if insecureSkipTLSVerify {
 		defaultTransport := http.DefaultTransport.(*http.Transport)
-		h.session.Config.HTTPClient = &http.Client{
+		s.session.Config.HTTPClient = &http.Client{
 			// Copied from net/http
 			Transport: &http.Transport{
 				Proxy:                 defaultTransport.Proxy,
@@ -124,66 +145,41 @@ func (h *S3Config) Init() error {
 	return nil
 }
 
-func (h *S3Config) initAWSSessions(s3ForcePathStyle bool) error {
-	cfg, err := newAWSConfig(h.s3URL, h.region, s3ForcePathStyle)
+func (s *S3Config) initAWSSessions(s3ForcePathStyle bool) error {
+	cfg, err := newAWSConfig(s.s3URL, s.region, s3ForcePathStyle)
 	if err != nil {
 		return err
 	}
 
-	sessionOptions := session.Options{Config: *cfg, Profile: h.credentialProfile}
-	if len(h.caCert) > 0 {
-		sessionOptions.CustomCABundle = strings.NewReader(h.caCert)
+	sessionOptions, err := newSessionOptions(*cfg, s.credentialProfile, s.caCert, s.credentialsFile)
+	if err != nil {
+		return err
 	}
 
-	h.session, err = getSession(sessionOptions)
+	s.session, err = getSession(sessionOptions)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
 	// init public session
-	if h.publicURL != "" {
-		pcfg, err := newAWSConfig(h.publicURL, h.region, s3ForcePathStyle)
+	if s.publicURL != "" {
+		pcfg, err := newAWSConfig(s.publicURL, s.region, s3ForcePathStyle)
 		if err != nil {
 			return err
 		}
 
-		sessionOptions = session.Options{Config: *pcfg, Profile: h.credentialProfile}
-		if len(h.caCert) > 0 {
-			sessionOptions.CustomCABundle = strings.NewReader(h.caCert)
+		publicSessionOptions, err := newSessionOptions(*pcfg, s.credentialProfile, s.caCert, s.credentialsFile)
+		if err != nil {
+			return err
 		}
 
-		h.publicSession, err = getSession(sessionOptions)
+		s.publicSession, err = getSession(publicSessionOptions)
 		if err != nil {
 			return errors.WithStack(err)
 		}
 	}
 
 	return nil
-}
-
-// GetBucketRegion returns the AWS region that a bucket is in, or an error
-// if the region cannot be determined.
-func (h *S3Config) getBucketRegion() (string, error) {
-	var region string
-	var fErr error
-
-	for _, partition := range endpoints.DefaultPartitions() {
-		for regionHint := range partition.Regions() {
-			var err error
-			region, err = s3manager.GetBucketRegion(context.Background(), h.session, h.bucket, regionHint)
-			if err != nil {
-				fErr = errors.Wrap(fErr, err.Error())
-			}
-			// we only need to try a single region hint per partition, so break after the first
-			break
-		}
-
-		if region != "" {
-			return region, nil
-		}
-	}
-
-	return "", errors.Wrap(fErr, "unable to determine bucket's region")
 }
 
 // IsValidS3URLScheme returns true if the scheme is http:// or https://
