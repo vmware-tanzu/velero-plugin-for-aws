@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 	"regexp"
 	"strings"
 
@@ -189,7 +190,36 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", errors.WithStack(err)
 	}
 
-	return *res.SnapshotId, nil
+	snapshotID := *res.SnapshotId
+
+	// wait for the snapshot to be completed
+	timeoutSec := 3600
+	t := 0
+	for true {
+		if t >= timeoutSec {
+			return "", fmt.Errorf("timed out waiting for the snapshot %s to complete", snapshotID)
+		}
+
+		snapRes, err := b.ec2.DescribeSnapshots(&ec2.DescribeSnapshotsInput{
+			SnapshotIds: []*string{res.SnapshotId},
+		})
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+
+		if count := len(snapRes.Snapshots); count != 1 {
+			return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
+		}
+
+		if *snapRes.Snapshots[0].State == "completed" {
+			break
+		}
+
+		t += 15
+		time.Sleep(15 * time.Second)
+	}
+
+	return snapshotID, nil
 }
 
 func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
