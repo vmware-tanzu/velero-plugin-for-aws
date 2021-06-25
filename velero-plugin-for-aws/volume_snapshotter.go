@@ -47,6 +47,7 @@ var iopsVolumeTypes = sets.NewString("io1")
 type VolumeSnapshotter struct {
 	log logrus.FieldLogger
 	ec2 *ec2.EC2
+	config map[string]string
 }
 
 // takes AWS session options to create a new session
@@ -86,6 +87,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	}
 
 	b.ec2 = ec2.New(sess)
+	b.config = config
 
 	return nil
 }
@@ -193,11 +195,16 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	snapshotID := *res.SnapshotId
 
 	// wait for the snapshot to be completed
-	timeoutSec := 3600
+	var previousProgress string
+	refreshCredsSec := 2700
 	t := 0
 	for true {
-		if t >= timeoutSec {
-			return "", fmt.Errorf("timed out waiting for the snapshot %s to complete", snapshotID)
+		if t >= refreshCredsSec {
+			// more than 45 minutes have passed for the temporary credentials so create a new session
+			err := b.Init(b.config)
+			if err != nil {
+				return "", errors.WithStack(err)
+			}
 		}
 
 		snapRes, err := b.ec2.DescribeSnapshots(&ec2.DescribeSnapshotsInput{
@@ -213,6 +220,16 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 
 		if *snapRes.Snapshots[0].State == "completed" {
 			break
+		}
+
+		if t == 3600 {
+			// set progress after 1 hour has passed
+			previousProgress = *snapRes.Snapshots[0].Progress
+		} else if t % 3600 == 0 {
+			if previousProgress == *snapRes.Snapshots[0].Progress {
+				return "", errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
+			}
+			previousProgress = *snapRes.Snapshots[0].Progress
 		}
 
 		t += 15
