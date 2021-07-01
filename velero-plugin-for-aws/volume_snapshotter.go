@@ -19,9 +19,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -29,12 +29,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 )
 
 const regionKey = "region"
@@ -45,8 +44,8 @@ const regionKey = "region"
 var iopsVolumeTypes = sets.NewString("io1")
 
 type VolumeSnapshotter struct {
-	log logrus.FieldLogger
-	ec2 *ec2.EC2
+	log    logrus.FieldLogger
+	ec2    *ec2.EC2
 	config map[string]string
 }
 
@@ -198,8 +197,15 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	var previousProgress string
 	refreshCredsSec := 2700
 	t := 0
-	for true {
-		if t != 0 && t % refreshCredsSec == 0 {
+
+	for {
+		currentTimeString := time.Now().Format(TimeFormat)
+		err := b.UpdateJobStore(currentTimeString)
+		if err != nil {
+			b.log.Error(err, "failed to updated timestamp in jobstore. Continuing...")
+		}
+		b.log.Info("Updated timestamp in jobstore")
+		if t != 0 && t%refreshCredsSec == 0 {
 			// more than 45 minutes have passed for the temporary credentials so create a new session
 			err := b.Init(b.config)
 			if err != nil {
@@ -225,7 +231,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		if t == 3600 {
 			// set progress after 1 hour has passed
 			previousProgress = *snapRes.Snapshots[0].Progress
-		} else if t > 3600 && t % 300 == 0 {
+		} else if t > 3600 && t%300 == 0 {
 			if previousProgress == *snapRes.Snapshots[0].Progress {
 				return "", errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
 			}
