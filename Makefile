@@ -15,8 +15,8 @@
 PKG := github.com/vmware-tanzu/velero-plugin-for-aws
 BIN := velero-plugin-for-aws
 
-REGISTRY 	?= velero
-VERSION 	?= main
+REGISTRY 	?= catalogicsoftware
+VERSION 	?= v1.2.2
 
 CONTAINER_PLATFORMS ?= amd64 arm arm64 # ppc64le
 
@@ -42,7 +42,8 @@ endif
 
 
 MULTIARCH_IMAGE = $(REGISTRY)/$(BIN)
-IMAGE ?= $(REGISTRY)/$(BIN)-$(GOARCH)
+#IMAGE ?= $(REGISTRY)/$(BIN)-$(GOARCH)
+IMAGE ?= $(REGISTRY)/$(BIN)
 
 # If you want to build all containers, see the 'all-containers' rule.
 # If you want to build AND push all containers, see the 'all-push' rule.

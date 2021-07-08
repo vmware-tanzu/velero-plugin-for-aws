@@ -21,6 +21,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -28,12 +29,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 )
 
 const regionKey = "region"
@@ -44,8 +44,9 @@ const regionKey = "region"
 var iopsVolumeTypes = sets.NewString("io1")
 
 type VolumeSnapshotter struct {
-	log logrus.FieldLogger
-	ec2 *ec2.EC2
+	log    logrus.FieldLogger
+	ec2    *ec2.EC2
+	config map[string]string
 }
 
 // takes AWS session options to create a new session
@@ -85,6 +86,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	}
 
 	b.ec2 = ec2.New(sess)
+	b.config = config
 
 	return nil
 }
@@ -189,7 +191,57 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", errors.WithStack(err)
 	}
 
-	return *res.SnapshotId, nil
+	snapshotID := *res.SnapshotId
+
+	// wait for the snapshot to be completed
+	var previousProgress string
+	refreshCredsSec := 3300
+	t := 0
+
+	for {
+		currentTimeString := time.Now().Format(TimeFormat)
+		err := b.UpdateJobStore(currentTimeString)
+		if err != nil {
+			b.log.Error(err, "<JOBSTORE UPDATE> Failed to updated timestamp in jobstore. Continuing...")
+		}
+		if t != 0 && t%refreshCredsSec == 0 {
+			// more than 45 minutes have passed for the temporary credentials so create a new session
+			err := b.Init(b.config)
+			if err != nil {
+				return "", errors.WithStack(err)
+			}
+		}
+
+		snapRes, err := b.ec2.DescribeSnapshots(&ec2.DescribeSnapshotsInput{
+			SnapshotIds: []*string{res.SnapshotId},
+		})
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+
+		if count := len(snapRes.Snapshots); count != 1 {
+			return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
+		}
+
+		if *snapRes.Snapshots[0].State == "completed" {
+			break
+		}
+
+		if t == 3600 {
+			// set progress after 1 hour has passed
+			previousProgress = *snapRes.Snapshots[0].Progress
+		} else if t > 3600 && t%300 == 0 {
+			if previousProgress == *snapRes.Snapshots[0].Progress {
+				return "", errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
+			}
+			previousProgress = *snapRes.Snapshots[0].Progress
+		}
+
+		t += 15
+		time.Sleep(15 * time.Second)
+	}
+
+	return snapshotID, nil
 }
 
 func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
