@@ -205,7 +205,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 			b.log.Error(err, "<JOBSTORE UPDATE> Failed to updated timestamp in jobstore. Continuing...")
 		}
 		if t != 0 && t%refreshCredsSec == 0 {
-			// more than 45 minutes have passed for the temporary credentials so create a new session
+			// more than 55 minutes have passed for the temporary credentials so create a new session
 			err := b.Init(b.config)
 			if err != nil {
 				return "", errors.WithStack(err)
@@ -230,7 +230,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		if t == 3600 {
 			// set progress after 1 hour has passed
 			previousProgress = *snapRes.Snapshots[0].Progress
-		} else if t > 3600 && t%300 == 0 {
+		} else if t > 3600 && t%3600 == 0 {
 			if previousProgress == *snapRes.Snapshots[0].Progress {
 				return "", errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
 			}
