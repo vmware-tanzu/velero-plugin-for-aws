@@ -195,7 +195,6 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 
 	// wait for the snapshot to be completed
 	var previousProgress string
-	refreshCredsSec := 3300
 	t := 0
 
 	for {
@@ -204,8 +203,8 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		if err != nil {
 			b.log.Error(err, "<JOBSTORE UPDATE> Failed to updated timestamp in jobstore. Continuing...")
 		}
-		if t != 0 && t%refreshCredsSec == 0 {
-			// more than 55 minutes have passed for the temporary credentials so create a new session
+		if t != 0 && t%600 == 0 {
+			b.log.Info("refreshing credentials ", "elapsedTime", t)
 			err := b.Init(b.config)
 			if err != nil {
 				return "", errors.WithStack(err)
