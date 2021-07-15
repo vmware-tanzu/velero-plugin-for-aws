@@ -197,6 +197,10 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	var previousProgress string
 	t := 0
 
+	// flag for deleting the configmap used to report progress
+	// to the client in defer()
+	var deleteSnapshotProgressConfigMap bool
+
 	for {
 		currentTimeString := time.Now().Format(TimeFormat)
 		err := b.UpdateJobStore(currentTimeString)
@@ -211,6 +215,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 			}
 		}
 
+		// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeSnapshots.html
 		snapRes, err := b.ec2.DescribeSnapshots(&ec2.DescribeSnapshotsInput{
 			SnapshotIds: []*string{res.SnapshotId},
 		})
@@ -222,25 +227,60 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 			return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
 		}
 
-		if *snapRes.Snapshots[0].State == "completed" {
-			break
+		var snapshotState string
+		var snapshotStateMessage string
+		var snapshotProgressPercentage string
+		if snapRes != nil && snapRes.Snapshots[0].State != nil {
+			snapshotState = *snapRes.Snapshots[0].State
+		}
+		if snapRes != nil && snapRes.Snapshots[0].StateMessage != nil {
+			snapshotStateMessage = *snapRes.Snapshots[0].StateMessage
+		}
+		if snapRes != nil && snapRes.Snapshots[0].Progress != nil {
+			snapshotProgressPercentage = *snapRes.Snapshots[0].Progress
 		}
 
-		if t == 3600 {
-			// set progress after 1 hour has passed
-			previousProgress = *snapRes.Snapshots[0].Progress
-		} else if t > 3600 && t%3600 == 0 {
-			if previousProgress == *snapRes.Snapshots[0].Progress {
-				return "", errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
+		err = b.UpdateSnapshotProgress(volumeInfo, snapshotID, tags, snapshotProgressPercentage, snapshotState, snapshotStateMessage)
+		if err != nil {
+			b.log.Error(err, "<SNAPSHOT PROGRESS UPDATE> Failed to update snapshot progress. Continuing...")
+		}
+
+		if !deleteSnapshotProgressConfigMap {
+			defer b.DeleteSnapshotProgressConfigMap()
+			deleteSnapshotProgressConfigMap = true
+		}
+
+		switch snapshotState {
+		case "error":
+			newErr := errors.Errorf("Snapshot AWS error: %s. Volume ID: %s", snapshotStateMessage, volumeID)
+			b.log.Error(err, "<SNAPSHOT PROGRESS UPDATE> Failed to update snapshot progress")
+			return "", newErr
+		case "completed":
+			b.log.Info("<SNAPSHOT PROGRESS UPDATE> Snapshot complete", "Volume ID", volumeID)
+			return snapshotID, nil
+		case "pending":
+			fallthrough
+		default:
+			if t == 3600 {
+				// set progress after 1 hour has passed
+				previousProgress = snapshotProgressPercentage
+			} else if t > 3600 && t%3600 == 0 {
+				if previousProgress == snapshotProgressPercentage {
+					newErr := errors.Errorf("EBS volume snapshot %s progress has been stuck on %s for 1 hour", snapshotID, previousProgress)
+					// TODO: At present, we are not setting the snapshotState as "failed". But, not sure if this is the right thing to do
+					err = b.UpdateSnapshotProgress(volumeInfo, snapshotID, tags, snapshotProgressPercentage, "failed", newErr.Error())
+					if err != nil {
+						b.log.Error(err, "<SNAPSHOT PROGRESS UPDATE> Failed to update snapshot progress. Continuing...")
+					}
+					return "", newErr
+				}
+				previousProgress = snapshotProgressPercentage
 			}
-			previousProgress = *snapRes.Snapshots[0].Progress
 		}
 
 		t += 15
 		time.Sleep(15 * time.Second)
 	}
-
-	return snapshotID, nil
 }
 
 func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
