@@ -302,7 +302,7 @@ It is not possible to use different credentials for additional Backup Storage Lo
 ### Prerequisites
 
 * Velero 1.6.0 or later
-* AWS plugin must be installed, either at install time, or by running `velero plugin install velero/velero-plugin-for-aws:v1.2.0`
+* AWS plugin must be installed, either at install time, or by running `velero plugin add velero/velero-plugin-for-aws:v1.2.0`
 
 ### Configure S3 bucket and credentials
 
