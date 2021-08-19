@@ -17,8 +17,10 @@ COPY . /go/src/velero-plugin-for-aws
 WORKDIR /go/src/velero-plugin-for-aws
 RUN GOARCH=arm CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
+FROM arm32v7/busybox:1.33.1 AS busybox
 
-FROM arm32v7/ubuntu:bionic
+FROM gcr.io/distroless/base-debian10:nonroot-arm
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
-USER nobody:nogroup
-ENTRYPOINT ["/bin/bash", "-c", "cp /plugins/* /target/."]
+COPY --from=busybox /bin/cp /bin/cp
+USER nonroot:nonroot
+ENTRYPOINT ["cp", "/plugins/velero-plugin-for-aws", "/target/."]
