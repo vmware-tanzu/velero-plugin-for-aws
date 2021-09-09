@@ -17,6 +17,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version  | Velero Version |
 |-----------------|----------------|
+| v1.3.x          | v1.7.x         |
 | v1.2.x          | v1.6.x         |
 | v1.1.x          | v1.5.x         |
 | v1.1.x          | v1.4.x         |
@@ -261,7 +262,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.2.1 \
+    --plugins velero/velero-plugin-for-aws:v1.3.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -273,7 +274,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.2.1 \
+    --plugins velero/velero-plugin-for-aws:v1.3.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -302,7 +303,7 @@ It is not possible to use different credentials for additional Backup Storage Lo
 ### Prerequisites
 
 * Velero 1.6.0 or later
-* AWS plugin must be installed, either at install time, or by running `velero plugin add velero/velero-plugin-for-aws:v1.2.1`
+* AWS plugin must be installed, either at install time, or by running `velero plugin add velero/velero-plugin-for-aws:plugin-version`, replace the `plugin-version` with the corresponding value
 
 ### Configure S3 bucket and credentials
 
