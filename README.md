@@ -261,7 +261,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.2.0 \
+    --plugins velero/velero-plugin-for-aws:v1.2.1 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -273,7 +273,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.2.0 \
+    --plugins velero/velero-plugin-for-aws:v1.2.1 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -302,7 +302,7 @@ It is not possible to use different credentials for additional Backup Storage Lo
 ### Prerequisites
 
 * Velero 1.6.0 or later
-* AWS plugin must be installed, either at install time, or by running `velero plugin add velero/velero-plugin-for-aws:v1.2.0`
+* AWS plugin must be installed, either at install time, or by running `velero plugin add velero/velero-plugin-for-aws:v1.2.1`
 
 ### Configure S3 bucket and credentials
 
