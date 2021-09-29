@@ -269,17 +269,16 @@ func (b *VolumeSnapshotter) GetVolumeID(unstructuredPV runtime.Unstructured) (st
 		return "", errors.WithStack(err)
 	}
 
-	if pv.Spec.AWSElasticBlockStore == nil && pv.Spec.CSI == nil {
+	if pv.Spec.CSI.Driver == "ebs.csi.aws.com" {
+		return ebsVolumeIDRegex.FindString(pv.Spec.CSI.VolumeHandle), nil
+	}
+
+	if pv.Spec.AWSElasticBlockStore == nil {
 		return "", nil
 	}
 
-	// VolumeHandle is implicit to the ebs.csi.aws.com driver
-	if pv.Spec.AWSElasticBlockStore.VolumeID == "" && pv.Spec.CSI.VolumeHandle == "" {
-		return "", errors.New("spec.awsElasticBlockStore.volumeID and spec.csi.volumeHandle not found")
-	}
-
-	if pv.Spec.CSI.Driver == "ebs.csi.aws.com" {
-		return ebsVolumeIDRegex.FindString(pv.Spec.CSI.VolumeHandle), nil
+	if pv.Spec.AWSElasticBlockStore.VolumeID == "" {
+		return "", errors.New("spec.awsElasticBlockStore.volumeID not found")
 	}
 
 	return ebsVolumeIDRegex.FindString(pv.Spec.AWSElasticBlockStore.VolumeID), nil
@@ -291,8 +290,8 @@ func (b *VolumeSnapshotter) SetVolumeID(unstructuredPV runtime.Unstructured, vol
 		return nil, errors.WithStack(err)
 	}
 
-	if pv.Spec.AWSElasticBlockStore == nil && pv.Spec.CSI == nil {
-		return nil, errors.New("spec.awsElasticBlockStore or spec.csi not found")
+	if pv.Spec.AWSElasticBlockStore == nil {
+		return nil, errors.New("spec.awsElasticBlockStore not found")
 	}
 
 	pvFailureDomainZone := pv.Labels["failure-domain.beta.kubernetes.io/zone"]
