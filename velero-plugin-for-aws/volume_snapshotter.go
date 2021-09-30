@@ -269,7 +269,9 @@ func (b *VolumeSnapshotter) GetVolumeID(unstructuredPV runtime.Unstructured) (st
 		return "", errors.WithStack(err)
 	}
 
+	// check for CSI driver
 	if pv.Spec.CSI.Driver == "ebs.csi.aws.com" {
+		println(pv.Spec.CSI.VolumeHandle)
 		return ebsVolumeIDRegex.FindString(pv.Spec.CSI.VolumeHandle), nil
 	}
 
@@ -288,6 +290,16 @@ func (b *VolumeSnapshotter) SetVolumeID(unstructuredPV runtime.Unstructured, vol
 	pv := new(v1.PersistentVolume)
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredPV.UnstructuredContent(), pv); err != nil {
 		return nil, errors.WithStack(err)
+	}
+
+	// EBS AWS CSI does not assign labels from its topology-aware provisioner.
+	// This accesses the pv.Spec data structure to get the zone/region values.
+	pvCSIFailureDomainZone := pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+
+	if len(pvCSIFailureDomainZone) > 0 {
+		pv.Spec.CSI.VolumeHandle = fmt.Sprintf("aws://%s/%s", pvCSIFailureDomainZone, volumeID)
+	} else {
+		pv.Spec.CSI.VolumeHandle = volumeID
 	}
 
 	if pv.Spec.AWSElasticBlockStore == nil {
