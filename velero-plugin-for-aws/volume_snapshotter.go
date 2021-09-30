@@ -271,7 +271,6 @@ func (b *VolumeSnapshotter) GetVolumeID(unstructuredPV runtime.Unstructured) (st
 
 	// check for CSI driver
 	if pv.Spec.CSI.Driver == "ebs.csi.aws.com" {
-		println(pv.Spec.CSI.VolumeHandle)
 		return ebsVolumeIDRegex.FindString(pv.Spec.CSI.VolumeHandle), nil
 	}
 
