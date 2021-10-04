@@ -20,6 +20,11 @@ spec:
     # Required.
     region: us-east-1
 
+    # An AWS region to which snapshots will be copied.
+    #
+    # Optional.
+    altRegion: us-west-1
+
     # AWS profile within the credentials file to use for the volume snapshot location.
     # 
     # Optional (defaults to "default").

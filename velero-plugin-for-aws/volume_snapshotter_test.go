@@ -296,3 +296,54 @@ func TestGetTags(t *testing.T) {
 		})
 	}
 }
+
+func TestPickSnapshotID(t *testing.T) {
+	tests := []struct {
+		name                string
+		compositeSnapshotID string
+		region              string
+		snapshotID          string
+		success             bool
+	}{
+		{
+			name:                "no alt region",
+			compositeSnapshotID: "snap-123",
+			region:              "irrelevant",
+			snapshotID:          "snap-123",
+			success:             true,
+		},
+		{
+			name:                "alt region unused",
+			compositeSnapshotID: "us-east-1/snap-123;us-west-1/snap-456",
+			region:              "us-east-1",
+			snapshotID:          "snap-123",
+			success:             true,
+		},
+		{
+			name:                "alt region used",
+			compositeSnapshotID: "us-east-1/snap-123;us-west-1/snap-456",
+			region:              "us-west-1",
+			snapshotID:          "snap-456",
+			success:             true,
+		},
+		{
+			name:                "unexpected region",
+			compositeSnapshotID: "us-east-1/snap-123;us-west-1/snap-456",
+			region:              "us-west-2",
+			snapshotID:          "",
+			success:             false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := pickSnapshotID(test.compositeSnapshotID, test.region)
+			if test.success {
+				assert.Nil(t, err)
+				assert.Equal(t, test.snapshotID, res)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}

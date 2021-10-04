@@ -37,6 +37,7 @@ import (
 )
 
 const regionKey = "region"
+const altRegionKey = "altRegion"
 
 // iopsVolumeTypes is a set of AWS EBS volume types for which IOPS should
 // be captured during snapshot and provided when creating a new volume
@@ -44,8 +45,9 @@ const regionKey = "region"
 var iopsVolumeTypes = sets.NewString("io1")
 
 type VolumeSnapshotter struct {
-	log logrus.FieldLogger
-	ec2 *ec2.EC2
+	log       logrus.FieldLogger
+	ec2       *ec2.EC2
+	altRegion string
 }
 
 // takes AWS session options to create a new session
@@ -66,7 +68,7 @@ func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 }
 
 func (b *VolumeSnapshotter) Init(config map[string]string) error {
-	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey); err != nil {
+	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, altRegionKey, credentialProfileKey); err != nil {
 		return err
 	}
 
@@ -85,11 +87,17 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	}
 
 	b.ec2 = ec2.New(sess)
+	b.altRegion = config[altRegionKey]
 
 	return nil
 }
 
-func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, volumeAZ string, iops *int64) (volumeID string, err error) {
+func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(compositeSnapshotID, volumeType, volumeAZ string, iops *int64) (volumeID string, err error) {
+	snapshotID, err := pickSnapshotID(compositeSnapshotID, *b.ec2.Config.Region)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
 	// describe the snapshot so we can apply its tags to the volume
 	snapReq := &ec2.DescribeSnapshotsInput{
 		SnapshotIds: []*string{&snapshotID},
@@ -137,6 +145,19 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 	return *res.VolumeId, nil
 }
 
+func pickSnapshotID(compositeSnapshotID string, region string) (string, error) {
+	for _, piece := range strings.Split(compositeSnapshotID, ";") {
+		slashes := strings.SplitN(piece, "/", 2)
+		if len(slashes) == 1 {
+			// No specified region.
+			return piece, nil
+		} else if slashes[0] == region {
+			return slashes[1], nil
+		}
+	}
+	return "", errors.Errorf("Could not find region %s in %s", region, compositeSnapshotID)
+}
+
 func (b *VolumeSnapshotter) GetVolumeInfo(volumeID, volumeAZ string) (string, *int64, error) {
 	volumeInfo, err := b.describeVolume(volumeID)
 	if err != nil {
@@ -182,20 +203,40 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", err
 	}
 
-	res, err := b.ec2.CreateSnapshot(&ec2.CreateSnapshotInput{
-		VolumeId: &volumeID,
-		TagSpecifications: []*ec2.TagSpecification{
-			{
-				ResourceType: aws.String(ec2.ResourceTypeSnapshot),
-				Tags:         getTags(tags, volumeInfo.Tags),
-			},
+	tagSpecs := []*ec2.TagSpecification{
+		{
+			ResourceType: aws.String(ec2.ResourceTypeSnapshot),
+			Tags:         getTags(tags, volumeInfo.Tags),
 		},
+	}
+
+	res, err := b.ec2.CreateSnapshot(&ec2.CreateSnapshotInput{
+		VolumeId:          &volumeID,
+		TagSpecifications: tagSpecs,
 	})
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 
-	return *res.SnapshotId, nil
+	if b.altRegion == "" {
+		return *res.SnapshotId, nil
+	}
+
+	sourceRegion := b.ec2.Config.Region
+	res2, err2 := b.ec2.CopySnapshot(&ec2.CopySnapshotInput{
+		SourceRegion:      sourceRegion,
+		SourceSnapshotId:  res.SnapshotId,
+		DestinationRegion: &b.altRegion,
+		TagSpecifications: tagSpecs,
+	})
+	if err2 != nil {
+		return "", errors.WithStack(err)
+	}
+	b.log.Infof("copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, b.altRegion)
+	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
+	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *res.SnapshotId, b.altRegion, *res2.SnapshotId), nil
+	// TODO does it make sense to wait until the snapshot copy is complete?
+
 }
 
 func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
