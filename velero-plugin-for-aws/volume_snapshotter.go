@@ -223,13 +223,13 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	}
 
 	sourceRegion := b.ec2.Config.Region
-	res2, err2 := b.ec2.CopySnapshot(&ec2.CopySnapshotInput{
+	res2, err := b.ec2.CopySnapshot(&ec2.CopySnapshotInput{
 		SourceRegion:      sourceRegion,
 		SourceSnapshotId:  res.SnapshotId,
 		DestinationRegion: &b.altRegion,
 		TagSpecifications: tagSpecs,
 	})
-	if err2 != nil {
+	if err != nil {
 		return "", errors.WithStack(err)
 	}
 	b.log.Infof("copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, b.altRegion)
