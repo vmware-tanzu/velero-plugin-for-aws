@@ -96,7 +96,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	b.ec2 = ec2
 
 	altRegion := config[altRegionKey]
-	if altRegion != "" {
+	if altRegion != "" && altRegion != region {
 		altRegionEc2, err := prepareEC2(altRegion, credentialProfile)
 		if err != nil {
 			return err
