@@ -288,12 +288,18 @@ func ec2Tag(key, val string) *ec2.Tag {
 	return &ec2.Tag{Key: &key, Value: &val}
 }
 
-func (b *VolumeSnapshotter) DeleteSnapshot(snapshotID string) error {
+func (b *VolumeSnapshotter) DeleteSnapshot(compositeSnapshotID string) error {
+	snapshotID, err := pickSnapshotID(compositeSnapshotID, *b.ec2.Config.Region)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	// TODO also try to delete snapshots from altRegion?
+
 	req := &ec2.DeleteSnapshotInput{
 		SnapshotId: &snapshotID,
 	}
 
-	_, err := b.ec2.DeleteSnapshot(req)
+	_, err = b.ec2.DeleteSnapshot(req)
 
 	// if it's a NotFound error, we don't need to return an error
 	// since the snapshot is not there.
