@@ -21,6 +21,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -106,6 +107,23 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	return nil
 }
 
+func (b *VolumeSnapshotter) getOneSnapshot(snapshotID string) (*ec2.Snapshot, error) {
+	snapReq := &ec2.DescribeSnapshotsInput{
+		SnapshotIds: []*string{&snapshotID},
+	}
+
+	snapRes, err := b.ec2.DescribeSnapshots(snapReq)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if count := len(snapRes.Snapshots); count != 1 {
+		return nil, errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
+	}
+
+	return snapRes.Snapshots[0], nil
+}
+
 func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(compositeSnapshotID, volumeType, volumeAZ string, iops *int64) (volumeID string, err error) {
 	snapshotID, err := pickSnapshotID(compositeSnapshotID, *b.ec2.Config.Region)
 	if err != nil {
@@ -113,17 +131,9 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(compositeSnapshotID, volume
 	}
 
 	// describe the snapshot so we can apply its tags to the volume
-	snapReq := &ec2.DescribeSnapshotsInput{
-		SnapshotIds: []*string{&snapshotID},
-	}
-
-	snapRes, err := b.ec2.DescribeSnapshots(snapReq)
+	snapshot, err := b.getOneSnapshot(snapshotID)
 	if err != nil {
 		return "", errors.WithStack(err)
-	}
-
-	if count := len(snapRes.Snapshots); count != 1 {
-		return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
 	}
 
 	overrideAZ := os.Getenv(envAZOverride)
@@ -138,11 +148,11 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(compositeSnapshotID, volume
 		SnapshotId:       &snapshotID,
 		AvailabilityZone: &volumeAZ,
 		VolumeType:       &volumeType,
-		Encrypted:        snapRes.Snapshots[0].Encrypted,
+		Encrypted:        snapshot.Encrypted,
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String(ec2.ResourceTypeVolume),
-				Tags:         getTagsForCluster(snapRes.Snapshots[0].Tags),
+				Tags:         getTagsForCluster(snapshot.Tags),
 			},
 		},
 	}
@@ -236,7 +246,16 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return *res.SnapshotId, nil
 	}
 
-	// TODO must wait until the source snapshot is complete before attempting to copy it
+	for *res.State == ec2.SnapshotStatePending {
+		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
+		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
+		b.log.Infof("Waiting for snapshot %s to complete before copying", *res.SnapshotId)
+		time.Sleep(1000 * time.Millisecond)
+		res, err = b.getOneSnapshot(*res.SnapshotId)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+	}
 
 	sourceRegion := b.ec2.Config.Region
 	res2, err := b.altRegionEc2.CopySnapshot(&ec2.CopySnapshotInput{
@@ -250,7 +269,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	b.log.Infof("Copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, *b.altRegionEc2.Config.Region)
 	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
 	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *res.SnapshotId, *b.altRegionEc2.Config.Region, *res2.SnapshotId), nil
-	// TODO does it make sense to wait until the snapshot copy is complete?
+	// TODO does it make sense to wait until the snapshot copy is complete? https://github.com/vmware-tanzu/velero/issues/3533 again
 
 }
 
