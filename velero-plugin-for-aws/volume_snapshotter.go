@@ -45,9 +45,9 @@ const altRegionKey = "altRegion"
 var iopsVolumeTypes = sets.NewString("io1")
 
 type VolumeSnapshotter struct {
-	log       logrus.FieldLogger
-	ec2       *ec2.EC2
-	altRegion string
+	log          logrus.FieldLogger
+	ec2          *ec2.EC2
+	altRegionEc2 *ec2.EC2
 }
 
 // takes AWS session options to create a new session
@@ -61,6 +61,16 @@ func getSession(options session.Options) (*session.Session, error) {
 		return nil, errors.WithStack(err)
 	}
 	return sess, nil
+}
+
+func prepareEC2(region, credentialProfile string) (*ec2.EC2, error) {
+	awsConfig := aws.NewConfig().WithRegion(region)
+	sessionOptions := session.Options{Config: *awsConfig, Profile: credentialProfile}
+	sess, err := getSession(sessionOptions)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return ec2.New(sess), nil
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -78,16 +88,20 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
 
-	awsConfig := aws.NewConfig().WithRegion(region)
-
-	sessionOptions := session.Options{Config: *awsConfig, Profile: credentialProfile}
-	sess, err := getSession(sessionOptions)
+	ec2, err := prepareEC2(region, credentialProfile)
 	if err != nil {
 		return err
 	}
+	b.ec2 = ec2
 
-	b.ec2 = ec2.New(sess)
-	b.altRegion = config[altRegionKey]
+	altRegion := config[altRegionKey]
+	if altRegion != "" {
+		altRegionEc2, err := prepareEC2(altRegion, credentialProfile)
+		if err != nil {
+			return err
+		}
+		b.altRegionEc2 = altRegionEc2
+	}
 
 	return nil
 }
@@ -218,23 +232,24 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", errors.WithStack(err)
 	}
 
-	if b.altRegion == "" {
+	if b.altRegionEc2 == nil {
 		return *res.SnapshotId, nil
 	}
 
+	// TODO must wait until the source snapshot is complete before attempting to copy it
+
 	sourceRegion := b.ec2.Config.Region
-	res2, err := b.ec2.CopySnapshot(&ec2.CopySnapshotInput{
+	res2, err := b.altRegionEc2.CopySnapshot(&ec2.CopySnapshotInput{
 		SourceRegion:      sourceRegion,
 		SourceSnapshotId:  res.SnapshotId,
-		DestinationRegion: &b.altRegion,
 		TagSpecifications: tagSpecs,
 	})
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to copy %s in %s to %s", *res.SnapshotId, *sourceRegion, b.altRegion)
+		return "", errors.Wrapf(err, "Failed to copy %s in %s to %s", *res.SnapshotId, *sourceRegion, *b.altRegionEc2.Config.Region)
 	}
-	b.log.Infof("copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, b.altRegion)
+	b.log.Infof("Copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, *b.altRegionEc2.Config.Region)
 	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
-	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *res.SnapshotId, b.altRegion, *res2.SnapshotId), nil
+	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *res.SnapshotId, *b.altRegionEc2.Config.Region, *res2.SnapshotId), nil
 	// TODO does it make sense to wait until the snapshot copy is complete?
 
 }
