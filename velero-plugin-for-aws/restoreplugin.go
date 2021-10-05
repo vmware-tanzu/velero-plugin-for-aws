@@ -90,8 +90,12 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 
 	if ebs := pv.Spec.AWSElasticBlockStore; ebs != nil {
 		tmp := strings.Split(ebs.VolumeID, "/")
-		tmp[2] = overrideAZ
-		ebs.VolumeID = strings.Join(tmp, "/")
+		if len(tmp) > 2 {
+			tmp[2] = overrideAZ
+			ebs.VolumeID = strings.Join(tmp, "/")
+		} else {
+			p.log.Infof("no AZ component found in EBS volume ID %s, so leaving it as is", ebs.VolumeID)
+		}
 	}
 
 	if na := pv.Spec.NodeAffinity; na != nil {
