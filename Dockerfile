@@ -13,8 +13,10 @@
 # limitations under the License.
 
 FROM golang:1.13-buster AS build
-COPY . /go/src/velero-plugin-for-aws
+COPY go.mod go.sum /go/src/velero-plugin-for-aws/
 WORKDIR /go/src/velero-plugin-for-aws
+RUN go mod download
+COPY . /go/src/velero-plugin-for-aws
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
 FROM busybox:1.33.1 AS busybox
