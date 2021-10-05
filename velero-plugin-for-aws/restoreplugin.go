@@ -33,6 +33,7 @@ const (
 	envAZOverride = "VELERO_AWS_AZ_OVERRIDE"
 	labelZoneBeta = "failure-domain.beta.kubernetes.io/zone"
 	labelZone     = "topology.kubernetes.io/zone"
+	labelRegion   = "topology.kubernetes.io/region"
 )
 
 // RestorePlugin is a restore item action plugin for Velero
@@ -80,6 +81,9 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 	if _, ok := labels[labelZone]; ok {
 		labels[labelZone] = overrideAZ
 	}
+	if _, ok := labels[labelRegion]; ok {
+		labels[labelRegion] = "us-west-1" // TODO pick up region from snapshotter? or just trim last letter from overrideAZ?
+	}
 
 	metadata.SetLabels(labels)
 
@@ -107,6 +111,10 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 							if (nst[i].MatchExpressions[j].Key == labelZoneBeta || nst[i].MatchExpressions[j].Key == labelZone) && nst[i].MatchExpressions[j].Operator == "In" {
 								p.log.Infof("Current node affinity set to %s, overriding to %s", nst[i].MatchExpressions[j].Values[0], overrideAZ)
 								nst[i].MatchExpressions[j].Values = []string{overrideAZ}
+							}
+							if (nst[i].MatchExpressions[j].Key == labelRegion) && nst[i].MatchExpressions[j].Operator == "In" {
+								p.log.Infof("Current node affinity set to %s, overriding to %s", nst[i].MatchExpressions[j].Values[0], "us-west-1") // TODO dutto
+								nst[i].MatchExpressions[j].Values = []string{"us-west-1"}                                                           // TODO ditto
 							}
 						}
 					}
