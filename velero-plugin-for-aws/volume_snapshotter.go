@@ -230,7 +230,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		TagSpecifications: tagSpecs,
 	})
 	if err != nil {
-		return "", errors.WithStack(err)
+		return "", errors.Wrapf(err, "failed to copy %s in %s to %s", *res.SnapshotId, *sourceRegion, b.altRegion)
 	}
 	b.log.Infof("copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, b.altRegion)
 	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
