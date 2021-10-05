@@ -49,7 +49,7 @@ func newRestorePlugin(logger logrus.FieldLogger) *RestorePlugin {
 // selector. A zero-valued ResourceSelector matches all resources.g
 func (p *RestorePlugin) AppliesTo() (velero.ResourceSelector, error) {
 	return velero.ResourceSelector{
-		IncludedResources: []string{"persistentvolume"},
+		IncludedResources: []string{"persistentvolumes"},
 	}, nil
 }
 
