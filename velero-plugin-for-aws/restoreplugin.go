@@ -65,6 +65,7 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 		return velero.NewRestoreItemActionExecuteOutput(input.Item), nil
 	}
 	p.log.Infof("variable %s found, overriding to: %s", envAZOverride, overrideAZ)
+	overrideRegion := overrideAZ[:len(overrideAZ)-1]
 
 	metadata, err := meta.Accessor(input.Item)
 	if err != nil {
@@ -82,7 +83,7 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 		labels[labelZone] = overrideAZ
 	}
 	if _, ok := labels[labelRegion]; ok {
-		labels[labelRegion] = "us-west-1" // TODO pick up region from snapshotter? or just trim last letter from overrideAZ?
+		labels[labelRegion] = overrideRegion
 	}
 
 	metadata.SetLabels(labels)
@@ -113,8 +114,8 @@ func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*v
 								nst[i].MatchExpressions[j].Values = []string{overrideAZ}
 							}
 							if (nst[i].MatchExpressions[j].Key == labelRegion) && nst[i].MatchExpressions[j].Operator == "In" {
-								p.log.Infof("Current node affinity set to %s, overriding to %s", nst[i].MatchExpressions[j].Values[0], "us-west-1") // TODO dutto
-								nst[i].MatchExpressions[j].Values = []string{"us-west-1"}                                                           // TODO ditto
+								p.log.Infof("Current node affinity set to %s, overriding to %s", nst[i].MatchExpressions[j].Values[0], overrideRegion)
+								nst[i].MatchExpressions[j].Values = []string{overrideRegion}
 							}
 						}
 					}
