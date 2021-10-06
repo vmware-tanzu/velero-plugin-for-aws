@@ -249,6 +249,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	for *res.State == ec2.SnapshotStatePending {
 		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
 		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
+		// TODO chatty, print this only after exponential backoff:
 		b.log.Infof("Waiting for snapshot %s to complete before copying", *res.SnapshotId)
 		time.Sleep(1000 * time.Millisecond)
 		res, err = b.getOneSnapshot(*res.SnapshotId)
