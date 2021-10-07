@@ -228,6 +228,13 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", err
 	}
 
+	for _, tag := range volumeInfo.Tags {
+		if *tag.Key == "kubernetes.io/created-for/pvc/name" {
+			b.log.Infof("Snapshotting %s", *tag.Value)
+			break
+		}
+	}
+
 	tagSpecs := []*ec2.TagSpecification{
 		{
 			ResourceType: aws.String(ec2.ResourceTypeSnapshot),
