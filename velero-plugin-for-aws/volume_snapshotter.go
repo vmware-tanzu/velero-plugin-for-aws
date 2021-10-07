@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -246,12 +247,11 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return *res.SnapshotId, nil
 	}
 
-	for *res.State == ec2.SnapshotStatePending {
+	for delaySec := 1.0; *res.State == ec2.SnapshotStatePending; delaySec = math.Min(delaySec*1.1, 60) {
 		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
 		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
-		// TODO chatty, print this only after exponential backoff:
 		b.log.Infof("Waiting for snapshot %s to complete before copying", *res.SnapshotId)
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(time.Duration(delaySec * float64(time.Second)))
 		res, err = b.getOneSnapshot(*res.SnapshotId)
 		if err != nil {
 			return "", errors.WithStack(err)
