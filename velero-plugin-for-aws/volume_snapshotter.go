@@ -108,12 +108,12 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	return nil
 }
 
-func (b *VolumeSnapshotter) getOneSnapshot(snapshotID string) (*ec2.Snapshot, error) {
+func getOneSnapshot(regionalEC2 *ec2.EC2, snapshotID string) (*ec2.Snapshot, error) {
 	snapReq := &ec2.DescribeSnapshotsInput{
 		SnapshotIds: []*string{&snapshotID},
 	}
 
-	snapRes, err := b.ec2.DescribeSnapshots(snapReq)
+	snapRes, err := regionalEC2.DescribeSnapshots(snapReq)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -132,7 +132,7 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(compositeSnapshotID, volume
 	}
 
 	// describe the snapshot so we can apply its tags to the volume
-	snapshot, err := b.getOneSnapshot(snapshotID)
+	snapshot, err := getOneSnapshot(b.ec2, snapshotID)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
@@ -242,7 +242,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		},
 	}
 
-	res, err := b.ec2.CreateSnapshot(&ec2.CreateSnapshotInput{
+	originalSnapshot, err := b.ec2.CreateSnapshot(&ec2.CreateSnapshotInput{
 		VolumeId:          &volumeID,
 		TagSpecifications: tagSpecs,
 	})
@@ -251,34 +251,54 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	}
 
 	if b.altRegionEc2 == nil {
-		return *res.SnapshotId, nil
+		return *originalSnapshot.SnapshotId, nil
 	}
 
-	for delaySec := 1.0; *res.State == ec2.SnapshotStatePending; delaySec = math.Min(delaySec*1.1, 60) {
-		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
-		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
-		b.log.Infof("Waiting for snapshot %s to complete before copying", *res.SnapshotId)
-		time.Sleep(time.Duration(delaySec * float64(time.Second)))
-		res, err = b.getOneSnapshot(*res.SnapshotId)
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
+	originalSnapshot, err = b.waitForSnapshotToComplete(b.ec2, originalSnapshot, "Waiting for snapshot %s to complete before copying: %s")
+	if err != nil {
+		return "", errors.WithStack(err)
 	}
 
 	sourceRegion := b.ec2.Config.Region
-	res2, err := b.altRegionEc2.CopySnapshot(&ec2.CopySnapshotInput{
+	copyResult, err := b.altRegionEc2.CopySnapshot(&ec2.CopySnapshotInput{
 		SourceRegion:      sourceRegion,
-		SourceSnapshotId:  res.SnapshotId,
+		SourceSnapshotId:  originalSnapshot.SnapshotId,
 		TagSpecifications: tagSpecs,
 	})
 	if err != nil {
-		return "", errors.Wrapf(err, "Failed to copy %s in %s to %s", *res.SnapshotId, *sourceRegion, *b.altRegionEc2.Config.Region)
+		return "", errors.Wrapf(err, "Failed to copy %s in %s to %s", *originalSnapshot.SnapshotId, *sourceRegion, *b.altRegionEc2.Config.Region)
 	}
-	b.log.Infof("Copied %s in %s to %s in %s", *res.SnapshotId, *sourceRegion, *res2.SnapshotId, *b.altRegionEc2.Config.Region)
-	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
-	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *res.SnapshotId, *b.altRegionEc2.Config.Region, *res2.SnapshotId), nil
-	// TODO does it make sense to wait until the snapshot copy is complete? https://github.com/vmware-tanzu/velero/issues/3533 again
 
+	copiedSnapshot, err := getOneSnapshot(b.altRegionEc2, *copyResult.SnapshotId)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	/* TODO is this necessary? Makes taking a backup considerably slower (and restore seems to work soon afterwards without it):
+	copiedSnapshot, err = b.waitForSnapshotToComplete(b.altRegionEc2, copiedSnapshot, "Waiting for snapshot copy %s to complete before proceeding: %s")
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	*/
+
+	b.log.Infof("Submitted request to copy %s in %s to %s in %s", *originalSnapshot.SnapshotId, *sourceRegion, *copiedSnapshot.SnapshotId, *b.altRegionEc2.Config.Region)
+	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
+	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *originalSnapshot.SnapshotId, *b.altRegionEc2.Config.Region, *copiedSnapshot.SnapshotId), nil
+}
+
+func (b *VolumeSnapshotter) waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snapshot *ec2.Snapshot, messageFormat string) (*ec2.Snapshot, error) {
+	for delaySec := 1.0; *snapshot.State == ec2.SnapshotStatePending; delaySec = math.Min(delaySec*1.1, 60) {
+		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
+		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
+		// Beware that Progress does not seem to update meaningfully—stays stuck at some percentage value until completion.
+		b.log.Infof(messageFormat, *snapshot.SnapshotId, *snapshot.Progress)
+		time.Sleep(time.Duration(delaySec * float64(time.Second)))
+		var err error
+		snapshot, err = getOneSnapshot(regionalEC2, *snapshot.SnapshotId)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return snapshot, nil
 }
 
 func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
