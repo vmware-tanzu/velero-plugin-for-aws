@@ -85,8 +85,10 @@ For more information, see [the AWS documentation on IAM users][10].
             {
                 "Effect": "Allow",
                 "Action": [
+                    "ebs:ListChangedBlocks",
                     "ec2:DescribeVolumes",
                     "ec2:DescribeSnapshots",
+                    "ec2:CopySnapshot",
                     "ec2:CreateTags",
                     "ec2:CreateVolume",
                     "ec2:CreateSnapshot",
@@ -209,8 +211,10 @@ It can be set up for Velero by creating a role that will have required permissio
             {
                 "Effect": "Allow",
                 "Action": [
+                    "ebs:ListChangedBlocks",
                     "ec2:DescribeVolumes",
                     "ec2:DescribeSnapshots",
+                    "ec2:CopySnapshot",
                     "ec2:CreateTags",
                     "ec2:CreateVolume",
                     "ec2:CreateSnapshot",

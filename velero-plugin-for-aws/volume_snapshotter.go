@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ebs"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -50,6 +51,7 @@ type VolumeSnapshotter struct {
 	log          logrus.FieldLogger
 	ec2          *ec2.EC2
 	altRegionEc2 *ec2.EC2
+	ebs          *ebs.EBS
 }
 
 // takes AWS session options to create a new session
@@ -65,14 +67,14 @@ func getSession(options session.Options) (*session.Session, error) {
 	return sess, nil
 }
 
-func prepareEC2(region, credentialProfile string) (*ec2.EC2, error) {
+func prepareSession(region, credentialProfile string) (*session.Session, error) {
 	awsConfig := aws.NewConfig().WithRegion(region)
 	sessionOptions := session.Options{Config: *awsConfig, Profile: credentialProfile}
 	sess, err := getSession(sessionOptions)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return ec2.New(sess), nil
+	return sess, nil
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -90,19 +92,20 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
 
-	ec2, err := prepareEC2(region, credentialProfile)
+	sess, err := prepareSession(region, credentialProfile)
 	if err != nil {
 		return err
 	}
-	b.ec2 = ec2
+	b.ec2 = ec2.New(sess)
+	b.ebs = ebs.New(sess)
 
 	altRegion := config[altRegionKey]
 	if altRegion != "" && altRegion != region {
-		altRegionEc2, err := prepareEC2(altRegion, credentialProfile)
+		altSess, err := prepareSession(altRegion, credentialProfile)
 		if err != nil {
 			return err
 		}
-		b.altRegionEc2 = altRegionEc2
+		b.altRegionEc2 = ec2.New(altSess)
 	}
 
 	return nil
@@ -257,6 +260,48 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	originalSnapshot, err = b.waitForSnapshotToComplete(b.ec2, originalSnapshot, "Waiting for snapshot %s to complete before copying: %s")
 	if err != nil {
 		return "", errors.WithStack(err)
+	}
+
+	// Display size of snapshot relative to the last snapshot of this volume.
+	filterName := "volume-id"
+	findPreviousSnapshot, err := b.ec2.DescribeSnapshots(&ec2.DescribeSnapshotsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   &filterName,
+				Values: []*string{&volumeID},
+			},
+		},
+	})
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	var latest *ec2.Snapshot
+	for _, s := range findPreviousSnapshot.Snapshots {
+		if *s.SnapshotId == *originalSnapshot.SnapshotId {
+			continue
+		}
+		if latest == nil || s.StartTime.After(*latest.StartTime) {
+			latest = s
+		}
+	}
+	if latest == nil {
+		b.log.Infof("No previous snapshot; performed complete copy of volume")
+	} else {
+		listChangedBlocks, err := b.ebs.ListChangedBlocks(&ebs.ListChangedBlocksInput{
+			FirstSnapshotId:  latest.SnapshotId,
+			SecondSnapshotId: originalSnapshot.SnapshotId,
+		})
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		if listChangedBlocks.BlockSize == nil {
+			b.log.Infof("Failed to determine number of changed blocks in snapshot (perhaps identical to previous)")
+		} else {
+			b.log.Infof("Compared to previous snapshot %s taken %s ago, %d blocks were changed out of this %dGB volume (%.1f%%)",
+				*latest.SnapshotId, time.Since(*latest.StartTime), len(listChangedBlocks.ChangedBlocks), *listChangedBlocks.VolumeSize,
+				// TODO are volume sizes in GB or GiB?
+				100.0*float32(len(listChangedBlocks.ChangedBlocks))*float32(*listChangedBlocks.BlockSize)/float32(*listChangedBlocks.VolumeSize)/1024.0/1024.0/1024.0)
+		}
 	}
 
 	sourceRegion := b.ec2.Config.Region
