@@ -286,6 +286,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 }
 
 func (b *VolumeSnapshotter) waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snapshot *ec2.Snapshot, messageFormat string) (*ec2.Snapshot, error) {
+	start := time.Now()
 	for delaySec := 1.0; *snapshot.State == ec2.SnapshotStatePending; delaySec = math.Min(delaySec*1.1, 60) {
 		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
 		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
@@ -298,6 +299,7 @@ func (b *VolumeSnapshotter) waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snap
 			return nil, errors.WithStack(err)
 		}
 	}
+	b.log.Infof("Snapshot complete in %.1fs", time.Since(start).Seconds())
 	return snapshot, nil
 }
 
