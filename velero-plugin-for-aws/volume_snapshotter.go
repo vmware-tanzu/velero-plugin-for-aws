@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	kubeerrs "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
@@ -402,28 +403,49 @@ func ec2Tag(key, val string) *ec2.Tag {
 }
 
 func (b *VolumeSnapshotter) DeleteSnapshot(compositeSnapshotID string) error {
-	snapshotID, err := pickSnapshotID(compositeSnapshotID, *b.ec2.Config.Region)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	// TODO also try to delete snapshots from altRegion?
+	var errs []error
 
-	req := &ec2.DeleteSnapshotInput{
-		SnapshotId: &snapshotID,
+	for _, piece := range strings.Split(compositeSnapshotID, ";") {
+		var (
+			regionalEc2 *ec2.EC2
+			snapshotID  string
+		)
+		slashes := strings.SplitN(piece, "/", 2)
+		if len(slashes) == 1 {
+			// No specified region.
+			regionalEc2 = b.ec2
+			snapshotID = piece
+		} else if slashes[0] == *b.ec2.Config.Region {
+			regionalEc2 = b.ec2
+			snapshotID = slashes[1]
+		} else if b.altRegionEc2 != nil && slashes[0] == *b.altRegionEc2.Config.Region {
+			regionalEc2 = b.altRegionEc2
+			snapshotID = slashes[1]
+		} else {
+			b.log.Infof("Ignoring request to delete snapshot %s in unrecognized region %s", slashes[1], slashes[0])
+			continue
+		}
+
+		req := &ec2.DeleteSnapshotInput{
+			SnapshotId: &snapshotID,
+		}
+
+		_, err := regionalEc2.DeleteSnapshot(req)
+
+		// if it's a NotFound error, we don't need to return an error
+		// since the snapshot is not there.
+		// see https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "InvalidSnapshot.NotFound" {
+			return nil
+		}
+		if err != nil {
+			errs = append(errs, errors.WithStack(err))
+		}
 	}
 
-	_, err = b.ec2.DeleteSnapshot(req)
-
-	// if it's a NotFound error, we don't need to return an error
-	// since the snapshot is not there.
-	// see https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
-	if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "InvalidSnapshot.NotFound" {
-		return nil
+	if len(errs) > 0 {
+		return kubeerrs.NewAggregate(errs)
 	}
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
 	return nil
 }
 
