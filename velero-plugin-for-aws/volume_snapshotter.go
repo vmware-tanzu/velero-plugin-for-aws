@@ -231,6 +231,17 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", err
 	}
 
+	log := b.log
+	for _, tag := range volumeInfo.Tags {
+		if *tag.Key == "kubernetes.io/created-for/pvc/name" {
+			log = log.WithField("persistentVolumeClaimName", *tag.Value)
+		} else if *tag.Key == "kubernetes.io/created-for/pvc/namespace" {
+			log = log.WithField("persistentVolumeClaimNamespace", *tag.Value)
+		} else if *tag.Key == "kubernetes.io/created-for/pv/name" {
+			log = log.WithField("persistentVolumeName", *tag.Value)
+		}
+	}
+
 	tagSpecs := []*ec2.TagSpecification{
 		{
 			ResourceType: aws.String(ec2.ResourceTypeSnapshot),
@@ -250,7 +261,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return *originalSnapshot.SnapshotId, nil
 	}
 
-	originalSnapshot, err = b.waitForSnapshotToComplete(b.ec2, originalSnapshot, "Waiting for snapshot %s to complete before copying: %s")
+	originalSnapshot, err = waitForSnapshotToComplete(b.ec2, originalSnapshot, log, "Waiting for snapshot %s to complete before copying: %s")
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
@@ -278,7 +289,7 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		}
 	}
 	if latest == nil {
-		b.log.Infof("No previous snapshot; performed complete copy of volume")
+		log.Infof("No previous snapshot; performed complete copy of volume")
 	} else {
 		listChangedBlocks, err := b.ebs.ListChangedBlocks(&ebs.ListChangedBlocksInput{
 			FirstSnapshotId:  latest.SnapshotId,
@@ -288,9 +299,9 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 			return "", errors.WithStack(err)
 		}
 		if listChangedBlocks.BlockSize == nil {
-			b.log.Infof("Failed to determine number of changed blocks in snapshot (perhaps identical to previous)")
+			log.Infof("Failed to determine number of changed blocks in snapshot (perhaps identical to previous)")
 		} else {
-			b.log.Infof("Compared to previous snapshot %s taken %s ago, %d blocks were changed out of this %dGB volume (%.1f%%)",
+			log.Infof("Compared to previous snapshot %s taken %s ago, %d blocks were changed out of this %dGB volume (%.1f%%)",
 				*latest.SnapshotId, time.Since(*latest.StartTime), len(listChangedBlocks.ChangedBlocks), *listChangedBlocks.VolumeSize,
 				// TODO are volume sizes in GB or GiB?
 				100.0*float32(len(listChangedBlocks.ChangedBlocks))*float32(*listChangedBlocks.BlockSize)/float32(*listChangedBlocks.VolumeSize)/1024.0/1024.0/1024.0)
@@ -312,24 +323,24 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", errors.WithStack(err)
 	}
 	/* TODO is this necessary? Makes taking a backup considerably slower (and restore seems to work soon afterwards without it):
-	copiedSnapshot, err = b.waitForSnapshotToComplete(b.altRegionEc2, copiedSnapshot, "Waiting for snapshot copy %s to complete before proceeding: %s")
+	copiedSnapshot, err = waitForSnapshotToComplete(b.altRegionEc2, copiedSnapshot, log, "Waiting for snapshot copy %s to complete before proceeding: %s")
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 	*/
 
-	b.log.Infof("Submitted request to copy %s in %s to %s in %s", *originalSnapshot.SnapshotId, *sourceRegion, *copiedSnapshot.SnapshotId, *b.altRegionEc2.Config.Region)
+	log.Infof("Submitted request to copy %s in %s to %s in %s", *originalSnapshot.SnapshotId, *sourceRegion, *copiedSnapshot.SnapshotId, *b.altRegionEc2.Config.Region)
 	// Record both original and copied snapshot IDs, prefixed with region so that we can decide which to restore later:
 	return fmt.Sprintf("%s/%s;%s/%s", *sourceRegion, *originalSnapshot.SnapshotId, *b.altRegionEc2.Config.Region, *copiedSnapshot.SnapshotId), nil
 }
 
-func (b *VolumeSnapshotter) waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snapshot *ec2.Snapshot, messageFormat string) (*ec2.Snapshot, error) {
+func waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snapshot *ec2.Snapshot, log logrus.FieldLogger, messageFormat string) (*ec2.Snapshot, error) {
 	start := time.Now()
 	for delaySec := 1.0; *snapshot.State == ec2.SnapshotStatePending; delaySec = math.Min(delaySec*1.1, 60) {
 		// TODO is there a better way to do this? https://github.com/vmware-tanzu/velero/issues/3533
 		// compare https://github.com/openshift/velero-plugin-for-aws/pull/2
 		// Beware that Progress does not seem to update meaningfully—stays stuck at some percentage value until completion.
-		b.log.Infof(messageFormat, *snapshot.SnapshotId, *snapshot.Progress)
+		log.Infof(messageFormat, *snapshot.SnapshotId, *snapshot.Progress)
 		time.Sleep(time.Duration(delaySec * float64(time.Second)))
 		var err error
 		snapshot, err = getOneSnapshot(regionalEC2, *snapshot.SnapshotId)
@@ -337,7 +348,7 @@ func (b *VolumeSnapshotter) waitForSnapshotToComplete(regionalEC2 *ec2.EC2, snap
 			return nil, errors.WithStack(err)
 		}
 	}
-	b.log.Infof("Snapshot complete in %.1fs", time.Since(start).Seconds())
+	log.Infof("Snapshot complete in %.1fs", time.Since(start).Seconds())
 	return snapshot, nil
 }
 
