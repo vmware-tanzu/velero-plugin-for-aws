@@ -28,7 +28,7 @@ spec:
   config:
     # The AWS region where the bucket is located. Queried from the AWS S3 API if not provided.
     #
-    # Optional.
+    # Optional if s3ForcePathStyle is false.
     region: us-east-1
 
     # Whether to use path-style addressing instead of virtual hosted bucket addressing. Set to "true"
