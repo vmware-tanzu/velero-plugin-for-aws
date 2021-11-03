@@ -81,4 +81,11 @@ spec:
     #
     # Optional (defaults to "false").
     insecureSkipTLSVerify: "true"
+
+    # Set this to "true" if you want to load the credentials file as a [shared config file](https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html).
+    # This will have no effect if credentials are not specific for a BSL.
+    #
+    # Optional (defaults to "false").
+    enableSharedConfig: "true"
+
 ```
