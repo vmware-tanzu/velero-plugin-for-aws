@@ -69,19 +69,25 @@ func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 }
 
 func (b *VolumeSnapshotter) Init(config map[string]string) error {
-	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey); err != nil {
+	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey, credentialsFileKey, enableSharedConfigKey); err != nil {
 		return err
 	}
 
 	region := config[regionKey]
 	credentialProfile := config[credentialProfileKey]
+	credentialsFile := config[credentialsFileKey]
+	enableSharedConfig := config[enableSharedConfigKey]
+
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
 
 	awsConfig := aws.NewConfig().WithRegion(region)
+	sessionOptions, err := newSessionOptions(*awsConfig, credentialProfile, "", credentialsFile, enableSharedConfig)
+	if err != nil {
+		return err
+	}
 
-	sessionOptions := session.Options{Config: *awsConfig, Profile: credentialProfile}
 	sess, err := getSession(sessionOptions)
 	if err != nil {
 		return err

@@ -52,6 +52,7 @@ const (
 	serverSideEncryptionKey  = "serverSideEncryption"
 	insecureSkipTLSVerifyKey = "insecureSkipTLSVerify"
 	caCertKey                = "caCert"
+	enableSharedConfigKey    = "enableSharedConfig"
 )
 
 type s3Interface interface {
@@ -96,6 +97,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		credentialProfileKey,
 		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
+		enableSharedConfigKey,
 	); err != nil {
 		return err
 	}
@@ -111,6 +113,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		credentialsFile          = config[credentialsFileKey]
 		serverSideEncryption     = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal = config[insecureSkipTLSVerifyKey]
+		enableSharedConfig       = config[enableSharedConfigKey]
 
 		// note that bucket is automatically added to the config map
 		// by the server from the ObjectStorageProviderConfig so
@@ -170,7 +173,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile)
+	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile, enableSharedConfig)
 	if err != nil {
 		return err
 	}
@@ -198,7 +201,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 
-		publicSessionOptions, err := newSessionOptions(*publicConfig, credentialProfile, caCert, credentialsFile)
+		publicSessionOptions, err := newSessionOptions(*publicConfig, credentialProfile, caCert, credentialsFile, enableSharedConfig)
 		if err != nil {
 			return err
 		}
@@ -218,7 +221,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 // newSessionOptions creates a session.Options with the given config and profile. If
 // caCert and credentialsFile are provided, these will be used for the CustomCABundle
 // and the credentials for the session.
-func newSessionOptions(config aws.Config, profile string, caCert string, credentialsFile string) (session.Options, error) {
+func newSessionOptions(config aws.Config, profile string, caCert string, credentialsFile string, enableSharedConfig string) (session.Options, error) {
 	sessionOptions := session.Options{Config: config, Profile: profile}
 
 	if caCert != "" {
@@ -233,6 +236,10 @@ func newSessionOptions(config aws.Config, profile string, caCert string, credent
 			return session.Options{}, errors.Wrapf(err, "could not get credentialsFile info")
 		}
 		sessionOptions.SharedConfigFiles = []string{credentialsFile}
+
+		if sharedConfig, berr := strconv.ParseBool(enableSharedConfig); sharedConfig && berr == nil {
+			sessionOptions.SharedConfigState = session.SharedConfigEnable
+		}
 	}
 
 	return sessionOptions, nil
