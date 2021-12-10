@@ -284,6 +284,13 @@ velero install \
 
 Additionally, you can specify `--use-restic` to enable restic support, and `--wait` to wait for the deployment to be ready.
 
+**Note:** If you are using EKS, there is a [known permissions issue](https://github.com/vmware-tanzu/velero/issues/3138) when using Velero with Kubernetes versions 1.18 and earlier that will prevent the Velero from being able to read S3 storage locations. To fix this, update the Velero deployment yaml file to include following `securityContext` value:
+
+```
+securityContext:
+        fsGroup: 65534
+```
+
 (Optional) Specify [additional configurable parameters][7] for the `--backup-location-config` flag.
 
 (Optional) Specify [additional configurable parameters][8] for the `--snapshot-location-config` flag.
