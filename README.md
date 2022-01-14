@@ -17,6 +17,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version  | Velero Version |
 |-----------------|----------------|
+| v1.4.x          | v1.8.x         |
 | v1.3.x          | v1.7.x         |
 | v1.2.x          | v1.6.x         |
 | v1.1.x          | v1.5.x         |
@@ -262,7 +263,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.3.0 \
+    --plugins velero/velero-plugin-for-aws:v1.4.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -274,7 +275,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.3.0 \
+    --plugins velero/velero-plugin-for-aws:v1.4.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
