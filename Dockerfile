@@ -17,7 +17,7 @@ COPY . /go/src/velero-plugin-for-aws
 WORKDIR /go/src/velero-plugin-for-aws
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
-FROM busybox:1.33.1 AS busybox
+FROM busybox:1.34.1 AS busybox
 
 FROM gcr.io/distroless/base-debian10@sha256:6dc8ca7c3bbdb1a00fd8f1229b1b8c88986a5818b830e3a42d4946982dbbf18b
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
