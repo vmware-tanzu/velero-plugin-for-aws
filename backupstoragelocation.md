@@ -60,8 +60,18 @@ spec:
     # to enable encryption of the backups stored in S3. Only works with AWS S3 and may require explicitly 
     # granting key usage rights. 
     #
+    # Cannot be used in conjunction with customerKeyEncryptionFile.
+    #
     # Optional.
     kmsKeyId: "502b409c-4da1-419f-a16e-eif453b3i49f"
+    
+    # Specify the file that contains the SSE-C customer key to enable customer key encryption of the backups
+    # stored in S3. The referenced file should contain a 32-byte string.
+    #
+    # Cannot be used in conjunction with kmsKeyId.
+    #
+    # Optional (defaults to "", which means SSE-C is disabled).
+    customerKeyEncryptionFile: "/credentials/customer-key"
 
     # Version of the signature algorithm used to create signed URLs that are used by velero CLI to 
     # download backups or fetch logs. Possible versions are "1" and "4". Usually the default version 
