@@ -71,6 +71,9 @@ if [[ ! -z "$TAG" ]]; then
 else
     echo "We're on branch $BRANCH"
     VERSION="$BRANCH"
+    if [[ "$VERSION" == release-* ]]; then
+      VERSION=${VERSION}-dev
+    fi
 fi
 
 # Debugging info
@@ -78,6 +81,7 @@ echo "Highest tag found: $HIGHEST"
 echo "BRANCH: $BRANCH"
 echo "TAG: $TAG"
 echo "TAG_LATEST: $TAG_LATEST"
+echo "VERSION: $VERSION"
 
 echo "Building and pushing container images."
 
