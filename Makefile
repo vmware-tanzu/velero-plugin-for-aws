@@ -90,7 +90,7 @@ local: build-dirs
 
 # test runs unit tests using 'go test' in the local environment.
 test:
-	CGO_ENABLED=0 go test -v -timeout 60s ./...
+	CGO_ENABLED=0 go test -v -coverprofile=coverage.out -timeout 60s ./...
 
 # ci is a convenience target for CI builds.
 ci: verify-modules test
