@@ -125,6 +125,10 @@ verify-modules: modules
 		echo "go module files are out of date, please commit the changes to go.mod and go.sum"; exit 1; \
 	fi
 
+
+changelog:
+	hack/release-tools/changelog.sh
+
 # clean removes build artifacts from the local environment.
 clean:
 	@echo "cleaning"
