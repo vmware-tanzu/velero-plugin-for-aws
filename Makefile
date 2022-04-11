@@ -90,7 +90,7 @@ local: build-dirs
 
 # test runs unit tests using 'go test' in the local environment.
 test:
-	CGO_ENABLED=0 go test -v -timeout 60s ./...
+	CGO_ENABLED=0 go test -v -coverprofile=coverage.out -timeout 60s ./...
 
 # ci is a convenience target for CI builds.
 ci: verify-modules test
@@ -124,6 +124,10 @@ verify-modules: modules
 	@if !(git diff --quiet HEAD -- go.sum go.mod); then \
 		echo "go module files are out of date, please commit the changes to go.mod and go.sum"; exit 1; \
 	fi
+
+
+changelog:
+	hack/release-tools/changelog.sh
 
 # clean removes build artifacts from the local environment.
 clean:
