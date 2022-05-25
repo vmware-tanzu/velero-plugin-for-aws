@@ -9,12 +9,10 @@ reviewers:
 
   groups:
     maintainers:
-      - dsu-igeek
       - sseago
       - reasonerjt
       - ywk253100
       - blackpiglet
-      - qiuming-best
 
 options:
   ignore_draft: true
