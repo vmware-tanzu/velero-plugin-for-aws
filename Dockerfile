@@ -29,8 +29,8 @@ RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
 
 FROM busybox:1.34.1 AS busybox
 
-FROM gcr.io/distroless/base-debian10:nonroot
+FROM scratch
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
 COPY --from=busybox /bin/cp /bin/cp
-USER nonroot:nonroot
+USER 65532:65532
 ENTRYPOINT ["cp", "/plugins/velero-plugin-for-aws", "/target/."]
