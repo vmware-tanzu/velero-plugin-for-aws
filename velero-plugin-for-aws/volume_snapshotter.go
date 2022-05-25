@@ -44,7 +44,7 @@ const (
 // iopsVolumeTypes is a set of AWS EBS volume types for which IOPS should
 // be captured during snapshot and provided when creating a new volume
 // from snapshot.
-var iopsVolumeTypes = sets.NewString("io1,io2")
+var iopsVolumeTypes = sets.NewString("io1","io2")
 
 type VolumeSnapshotter struct {
 	log logrus.FieldLogger
