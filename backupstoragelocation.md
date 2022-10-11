@@ -56,7 +56,7 @@ spec:
     # Optional.
     serverSideEncryption: AES256
 
-    # Specify an AWS KMS key ID (formatted per the example) or alias (formatted as "alias/<KMS-key-alias-name>")
+    # Specify an AWS KMS key ID (formatted per the example) or alias (formatted as "alias/<KMS-key-alias-name>"), or its full ARN
     # to enable encryption of the backups stored in S3. Only works with AWS S3 and may require explicitly 
     # granting key usage rights. 
     #
