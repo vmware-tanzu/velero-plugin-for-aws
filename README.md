@@ -285,7 +285,7 @@ velero install \
     --no-secret
 ```
 
-Additionally, you can specify `--use-restic` to enable restic support, and `--wait` to wait for the deployment to be ready.
+Additionally, you can specify `--use-node-agent` to enable node agent support, and `--wait` to wait for the deployment to be ready.
 
 **Note:** If you are using EKS, there is a [known permissions issue](https://github.com/vmware-tanzu/velero/issues/3138) when using Velero with Kubernetes versions 1.18 and earlier that will prevent the Velero from being able to read S3 storage locations. To fix this, update the Velero deployment yaml file to include following `securityContext` value:
 
