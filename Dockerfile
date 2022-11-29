@@ -27,7 +27,7 @@ WORKDIR /go/src/velero-plugin-for-aws
 RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
     CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
-FROM busybox:1.34.1 AS busybox
+FROM busybox@sha256:fcd85228d7a25feb59f101ac3a955d27c80df4ad824d65f5757a954831450185 AS busybox
 
 FROM scratch
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
