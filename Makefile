@@ -103,6 +103,7 @@ endif
 	--output=type=$(BUILDX_OUTPUT_TYPE) \
 	--platform $(BUILDX_PLATFORMS) \
 	$(addprefix -t , $(IMAGE_TAGS)) \
+	--build-arg=GOPROXY=$(GOPROXY) \
 	--build-arg=PKG=$(PKG) \
 	--build-arg=BIN=$(BIN) \
 	--build-arg=VERSION=$(VERSION) \
@@ -111,6 +112,12 @@ endif
 	--build-arg=REGISTRY=$(REGISTRY) \
 	-f $(VELERO_DOCKERFILE) .
 	@echo "container: $(IMAGE):$(VERSION)"
+ifeq ($(BUILDX_OUTPUT_TYPE)_$(REGISTRY), registry_velero)
+	docker pull $(IMAGE):$(VERSION)
+	rm -f $(BIN)-$(VERSION).tar
+	docker save $(IMAGE):$(VERSION) -o $(BIN)-$(VERSION).tar
+	gzip -f $(BIN)-$(VERSION).tar
+endif
 
 build-dirs:
 	@mkdir -p _output/bin/$(GOOS)/$(GOARCH)

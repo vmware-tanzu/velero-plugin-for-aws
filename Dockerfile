@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM golang:1.18-buster AS build
+FROM --platform=$BUILDPLATFORM golang:1.18-bullseye AS build
 
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
+ARG GOPROXY
 
 ENV GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
-    GOARM=${TARGETVARIANT}
+    GOARM=${TARGETVARIANT} \
+    GOPROXY=${GOPROXY}
 
 COPY . /go/src/velero-plugin-for-aws
 WORKDIR /go/src/velero-plugin-for-aws
