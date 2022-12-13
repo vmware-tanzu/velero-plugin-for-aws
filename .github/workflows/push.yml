@@ -66,6 +66,7 @@ jobs:
       if: github.repository == 'vmware-tanzu/velero-plugin-for-aws'
       run: |
         docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_PASSWORD }}
+        # Call `docker-push.sh` to push the velero-plugin-for-aws image to dockerhub 
         VERSION=$(./hack/docker-push.sh | grep 'VERSION:' | awk -F: '{print $2}' | xargs)
 
         # Upload velero-plugin-for-aws image package to GCS
