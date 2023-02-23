@@ -36,20 +36,16 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/cobra v1.2.1 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
-	golang.org/x/sys v0.1.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b //indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20210828152312-66f60bf46e71 // indirect
 	google.golang.org/grpc v1.40.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.9.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
-)
-
-replace (
-	golang.org/x/net => golang.org/x/net v0.1.1-0.20221104162952-702349b0e862
-	golang.org/x/text => golang.org/x/text v0.3.8
 )
