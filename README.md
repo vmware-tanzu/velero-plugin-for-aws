@@ -6,7 +6,8 @@
 
 This repository contains these plugins to support running Velero on AWS:
 
-- An object store plugin for persisting and retrieving backups on AWS S3. Content of backup is kubernetes resources and metadata, log files, warning/error files, restore logs.
+- An object store plugin for persisting and retrieving backups on AWS S3. Content of backup is kubernetes resources and metadata files for CSI objects, progress of async operations.  
+  It is also used to store the result data of backups and restores include log files, warning/error files, etc.
 
 - A volume snapshotter plugin for creating snapshots from volumes (during a backup) and volumes from snapshots (during a restore) on AWS EBS.
   - Since v1.4.0 the snapshotter plugin can handle the volumes provisioned by CSI driver `ebs.csi.aws.com`
