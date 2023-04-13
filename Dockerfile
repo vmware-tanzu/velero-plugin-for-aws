@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM golang:1.18.10-bullseye AS build
+FROM --platform=$BUILDPLATFORM golang:1.19.8-bullseye AS build
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -25,12 +25,10 @@ ENV GOOS=${TARGETOS} \
 COPY . /go/src/velero-plugin-for-aws
 WORKDIR /go/src/velero-plugin-for-aws
 RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
-    CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
-
-FROM busybox@sha256:fcd85228d7a25feb59f101ac3a955d27c80df4ad824d65f5757a954831450185 AS busybox
-
+    CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws && \
+    CGO_ENABLED=0 go build -v -o /go/bin/cp-plugin ./hack/cp-plugin
 FROM scratch
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
-COPY --from=busybox /bin/cp /bin/cp
+COPY --from=build /go/bin/cp-plugin /bin/cp-plugin
 USER 65532:65532
-ENTRYPOINT ["cp", "/plugins/velero-plugin-for-aws", "/target/."]
+ENTRYPOINT ["cp-plugin", "/plugins/velero-plugin-for-aws", "/target/velero-plugin-for-aws"]
