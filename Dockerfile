@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM golang:1.18-bullseye AS build
+FROM --platform=$BUILDPLATFORM golang:1.19-bullseye AS build
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -29,7 +29,7 @@ WORKDIR /go/src/velero-plugin-for-aws
 RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
     CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws
 
-FROM busybox:1.34.1-uclibc AS busybox
+FROM busybox:1.36.0-uclibc AS busybox
 
 FROM scratch
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
