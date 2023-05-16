@@ -18,6 +18,8 @@ package main
 
 import (
 	"crypto/tls"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"io"
 	"net/http"
 	"os"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -284,8 +287,18 @@ func newSessionOptions(config aws.Config, profile string, caCert string, credent
 		if sharedConfig, berr := strconv.ParseBool(enableSharedConfig); sharedConfig && berr == nil {
 			sessionOptions.SharedConfigState = session.SharedConfigEnable
 		}
+	} else if len(os.Getenv("AWS_ROLE_ARN")) > 0 {
+		// Assume we're running in a pod with a service account
+		sess := session.Must(session.NewSession())
+		conf := config.WithCredentialsChainVerboseErrors(true).
+			WithCredentials(credentials.NewCredentials(stscreds.NewWebIdentityRoleProvider(
+				sts.New(sess),
+				os.Getenv("AWS_ROLE_ARN"),
+				"",
+				os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"),
+			)))
+		sessionOptions.Config = *conf
 	}
-
 	return sessionOptions, nil
 }
 
