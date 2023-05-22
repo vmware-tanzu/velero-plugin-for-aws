@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -57,4 +58,29 @@ func IsValidS3URLScheme(s3URL string) bool {
 		return false
 	}
 	return true
+}
+
+func CheckTags(tagging string) error {
+	tags := strings.Split(tagging, "&")
+	if len(tags) == 1 {
+		return errors.New("Tags are not seperated with an &")
+	}
+	for c, j := range tags {
+		if c > 9 {
+			return errors.New("Aws S3 allows only ten tags per object")
+		}
+		tg := strings.Split(j, "=")
+		if len(tg) != 2 {
+			return errors.New("invalid tags provided")
+		} else {
+			if len([]rune(tg[0])) > 128 {
+				return errors.New("An S3 tag key can not be more than 128 Unicode characters in length")
+			} else {
+				if len([]rune(tg[1])) > 248 {
+					return errors.New("An S3 tag values can not be more 256 Unicode characters in length")
+				}
+			}
+		}
+	}
+	return nil
 }
