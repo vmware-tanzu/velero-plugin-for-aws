@@ -57,6 +57,7 @@ const (
 	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
 	caCertKey                    = "caCert"
 	enableSharedConfigKey        = "enableSharedConfig"
+	taggingKey                   = "tagging"
 )
 
 type s3Interface interface {
@@ -76,6 +77,7 @@ type ObjectStore struct {
 	sseCustomerKey       string
 	signatureVersion     string
 	serverSideEncryption string
+	tagging              string
 }
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
@@ -104,6 +106,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
 		enableSharedConfigKey,
+		taggingKey,
 	); err != nil {
 		return err
 	}
@@ -121,6 +124,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		serverSideEncryption      = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
 		enableSharedConfig        = config[enableSharedConfigKey]
+		tagging                   = config[taggingKey]
 
 		// note that bucket is automatically added to the config map
 		// by the server from the ObjectStorageProviderConfig so
@@ -194,6 +198,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	o.s3Uploader = s3manager.NewUploader(serverSession)
 	o.kmsKeyID = kmsKeyID
 	o.serverSideEncryption = serverSideEncryption
+	o.tagging = tagging
 
 	if customerKeyEncryptionFile != "" && kmsKeyID != "" {
 		return errors.Wrapf(err, "you cannot use %s and %s at the same time", kmsKeyIDKey, customerKeyEncryptionFileKey)
@@ -232,6 +237,13 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		o.preSignS3 = s3.New(publicSession)
 	} else {
 		o.preSignS3 = o.s3
+	}
+
+	if tagging != "" {
+		err = CheckTags(tagging)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -330,9 +342,10 @@ func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) 
 
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	req := &s3manager.UploadInput{
-		Bucket: &bucket,
-		Key:    &key,
-		Body:   body,
+		Bucket:  &bucket,
+		Key:     &key,
+		Body:    body,
+		Tagging: &o.tagging,
 	}
 
 	switch {

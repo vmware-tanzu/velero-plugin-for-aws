@@ -98,4 +98,9 @@ spec:
     # Optional (defaults to "false").
     enableSharedConfig: "true"
 
+    # Tags that need to be placed on AWS S3 objects. 
+    # For example "Key1=Value1&Key2=Value2"
+    # Optional (defaults to empty "")
+    tagging: ""
+
 ```
