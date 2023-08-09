@@ -18,8 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"io"
 	"net/http"
 	"os"
@@ -30,7 +28,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -268,9 +265,8 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 // newSessionOptions creates a session.Options with the given config and profile. If
 // caCert and credentialsFile are provided, these will be used for the CustomCABundle
 // and the credentials for the session.
-func newSessionOptions(config aws.Config, profile string, caCert string, credentialsFile string, enableSharedConfig string) (session.Options, error) {
+func newSessionOptions(config aws.Config, profile, caCert, credentialsFile, enableSharedConfig string) (session.Options, error) {
 	sessionOptions := session.Options{Config: config, Profile: profile}
-
 	if caCert != "" {
 		sessionOptions.CustomCABundle = strings.NewReader(caCert)
 	}
@@ -282,23 +278,10 @@ func newSessionOptions(config aws.Config, profile string, caCert string, credent
 			}
 			return session.Options{}, errors.Wrapf(err, "could not get credentialsFile info")
 		}
-		sessionOptions.SharedConfigFiles = []string{credentialsFile}
-
-		if sharedConfig, berr := strconv.ParseBool(enableSharedConfig); sharedConfig && berr == nil {
-			sessionOptions.SharedConfigState = session.SharedConfigEnable
-		}
-	} else if len(os.Getenv("AWS_ROLE_ARN")) > 0 {
-		// Assume we're running in a pod with a service account
-		sess := session.Must(session.NewSession())
-		conf := config.WithCredentialsChainVerboseErrors(true).
-			WithCredentials(credentials.NewCredentials(stscreds.NewWebIdentityRoleProvider(
-				sts.New(sess),
-				os.Getenv("AWS_ROLE_ARN"),
-				"",
-				os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"),
-			)))
-		sessionOptions.Config = *conf
+		sessionOptions.SharedConfigFiles = append(sessionOptions.SharedConfigFiles, credentialsFile)
+		sessionOptions.SharedConfigState = session.SharedConfigEnable
 	}
+
 	return sessionOptions, nil
 }
 
@@ -314,7 +297,7 @@ func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) 
 
 		awsConfig = awsConfig.WithEndpointResolver(
 			endpoints.ResolverFunc(func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
-				if service == endpoints.S3ServiceID {
+				if service == s3.EndpointsID {
 					return endpoints.ResolvedEndpoint{
 						URL: url,
 					}, nil
@@ -326,6 +309,20 @@ func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) 
 	}
 
 	return awsConfig, nil
+}
+
+// takes AWS session options to create a new session
+func getSession(options session.Options) (*session.Session, error) {
+	sess, err := session.NewSessionWithOptions(options)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if _, err := sess.Config.Credentials.Get(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return sess, nil
 }
 
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {

@@ -24,7 +24,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -37,31 +36,18 @@ import (
 )
 
 const (
-	regionKey = "region"
+	regionKey    = "region"
 	ebsCSIDriver = "ebs.csi.aws.com"
 )
 
 // iopsVolumeTypes is a set of AWS EBS volume types for which IOPS should
 // be captured during snapshot and provided when creating a new volume
 // from snapshot.
-var iopsVolumeTypes = sets.NewString("io1","io2")
+var iopsVolumeTypes = sets.NewString("io1", "io2")
 
 type VolumeSnapshotter struct {
 	log logrus.FieldLogger
 	ec2 *ec2.EC2
-}
-
-// takes AWS session options to create a new session
-func getSession(options session.Options) (*session.Session, error) {
-	sess, err := session.NewSessionWithOptions(options)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	if _, err := sess.Config.Credentials.Get(); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	return sess, nil
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
