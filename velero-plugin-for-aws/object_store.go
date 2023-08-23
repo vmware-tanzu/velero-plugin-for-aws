@@ -271,6 +271,10 @@ func newSessionOptions(config aws.Config, profile, caCert, credentialsFile, enab
 		sessionOptions.CustomCABundle = strings.NewReader(caCert)
 	}
 
+	if credentialsFile == "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "" {
+		credentialsFile = os.Getenv("AWS_SHARED_CREDENTIALS_FILE")
+	}
+
 	if credentialsFile != "" {
 		if _, err := os.Stat(credentialsFile); err != nil {
 			if os.IsNotExist(err) {
