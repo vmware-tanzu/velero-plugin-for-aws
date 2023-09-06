@@ -13,7 +13,15 @@ spec:
   #
   # Required.
   provider: velero.io/aws
-  
+
+  # The credentials intended to be used with this location.
+  # optional (if not set, default credentials secret is used)
+  credential:
+    # Key within the secret data which contains the cloud credentials
+    key: cloud
+    # Name of the secret containing the credentials
+    name: cloud-credentials
+
   config:
     # The AWS region where the volumes/snapshots are located.
     #
@@ -24,4 +32,10 @@ spec:
     # 
     # Optional (defaults to "default").
     profile: "default"
+
+    # Set this to "true" if you want to load the credentials file as a [shared config file](https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html).
+    # This will have no effect if credentials are not specific for a VSL.
+    #
+    # Optional (defaults to "false").
+    enableSharedConfig: "true"
 ```

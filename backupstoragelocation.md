@@ -25,6 +25,14 @@ spec:
     # Optional.
     prefix: my-prefix
   
+  # The credentials intended to be used with this location.
+  # optional (if not set, default credentials secret is used)
+  credential:
+    # Key within the secret data which contains the cloud credentials
+    key: cloud
+    # Name of the secret containing the credentials
+    name: cloud-credentials
+
   config:
     # The AWS region where the bucket is located. Queried from the AWS S3 API if not provided.
     #
