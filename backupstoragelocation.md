@@ -50,6 +50,15 @@ spec:
     #
     # Optional.
     s3Url: "http://minio:9000"
+
+    # If specified, the plugin will use the current role to assume this one.
+    # This is only used for the upload to the S3 bucket, it is not used for
+    # volume snapshotting.
+    # This assumed role is useful to upload in a bucket located in a different
+    # AWS account.
+    #
+    # Optional.
+    s3AssumeRole: ""
     
     # If specified, use this instead of "s3Url" when generating download URLs (e.g., for logs). This 
     # field is primarily for local storage services like MinIO.

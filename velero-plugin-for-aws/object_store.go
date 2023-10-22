@@ -28,6 +28,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -42,6 +43,7 @@ import (
 
 const (
 	s3URLKey                     = "s3Url"
+	s3AssumeRole                 = "s3AssumeRole"
 	publicURLKey                 = "publicUrl"
 	kmsKeyIDKey                  = "kmsKeyId"
 	customerKeyEncryptionFileKey = "customerKeyEncryptionFile"
@@ -91,6 +93,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	if err := veleroplugin.ValidateObjectStoreConfigKeys(config,
 		regionKey,
 		s3URLKey,
+		s3AssumeRole,
 		publicURLKey,
 		kmsKeyIDKey,
 		customerKeyEncryptionFileKey,
@@ -108,6 +111,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	var (
 		region                    = config[regionKey]
 		s3URL                     = config[s3URLKey]
+		s3AssumeRole              = config[s3AssumeRole]
 		publicURL                 = config[publicURLKey]
 		kmsKeyID                  = config[kmsKeyIDKey]
 		customerKeyEncryptionFile = config[customerKeyEncryptionFileKey]
@@ -182,7 +186,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		return err
 	}
 
-	serverSession, err := getSession(sessionOptions)
+	serverSession, err := getSession(sessionOptions, s3AssumeRole)
 	if err != nil {
 		return err
 	}
@@ -222,7 +226,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 
-		publicSession, err := getSession(publicSessionOptions)
+		publicSession, err := getSession(publicSessionOptions, s3AssumeRole)
 		if err != nil {
 			return err
 		}
@@ -316,10 +320,14 @@ func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) 
 }
 
 // takes AWS session options to create a new session
-func getSession(options session.Options) (*session.Session, error) {
+func getSession(options session.Options, assumeRole string) (*session.Session, error) {
 	sess, err := session.NewSessionWithOptions(options)
 	if err != nil {
 		return nil, errors.WithStack(err)
+	}
+
+	if assumeRole != "" {
+		sess.Config.WithCredentials(stscreds.NewCredentials(sess, assumeRole))
 	}
 
 	if _, err := sess.Config.Credentials.Get(); err != nil {

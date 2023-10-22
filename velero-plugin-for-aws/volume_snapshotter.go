@@ -74,7 +74,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return err
 	}
 
-	sess, err := getSession(sessionOptions)
+	sess, err := getSession(sessionOptions, "")
 	if err != nil {
 		return err
 	}
