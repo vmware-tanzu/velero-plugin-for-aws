@@ -17,23 +17,18 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
+	"context"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"io"
-	"net/http"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -57,18 +52,21 @@ const (
 )
 
 type s3Interface interface {
-	HeadObject(input *s3.HeadObjectInput) (*s3.HeadObjectOutput, error)
-	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
-	ListObjectsV2Pages(input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool) error
-	DeleteObject(input *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error)
-	GetObjectRequest(input *s3.GetObjectInput) (req *request.Request, output *s3.GetObjectOutput)
+	HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	DeleteObject(ctx context.Context, input *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+}
+
+type s3PresignInterface interface {
+	PresignGetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(options *s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
 
 type ObjectStore struct {
 	log                  logrus.FieldLogger
 	s3                   s3Interface
-	preSignS3            s3Interface
-	s3Uploader           *s3manager.Uploader
+	preSignS3            s3PresignInterface
+	s3Uploader           *manager.Uploader
 	kmsKeyID             string
 	sseCustomerKey       string
 	signatureVersion     string
@@ -77,14 +75,6 @@ type ObjectStore struct {
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
 	return &ObjectStore{log: logger}
-}
-
-func isValidSignatureVersion(signatureVersion string) bool {
-	switch signatureVersion {
-	case "1", "4":
-		return true
-	}
-	return false
 }
 
 func (o *ObjectStore) Init(config map[string]string) error {
@@ -112,12 +102,10 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		kmsKeyID                  = config[kmsKeyIDKey]
 		customerKeyEncryptionFile = config[customerKeyEncryptionFileKey]
 		s3ForcePathStyleVal       = config[s3ForcePathStyleKey]
-		signatureVersion          = config[signatureVersionKey]
 		credentialProfile         = config[credentialProfileKey]
 		credentialsFile           = config[credentialsFileKey]
 		serverSideEncryption      = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
-		enableSharedConfig        = config[enableSharedConfigKey]
 
 		// note that bucket is automatically added to the config map
 		// by the server from the ObjectStorageProviderConfig so
@@ -140,16 +128,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	// explicitly specified: determine the bucket's region
 	if s3URL == "" && region == "" {
 		var err error
-
-		region, err = GetBucketRegion(bucket)
+		region, err = GetBucketRegion(bucket, s3ForcePathStyle)
 		if err != nil {
+			o.log.Errorf("Failed to get bucket region, bucket: %s, error: %v", bucket, err)
 			return err
 		}
-	}
-
-	serverConfig, err := newAWSConfig(s3URL, region, s3ForcePathStyle)
-	if err != nil {
-		return err
 	}
 
 	if insecureSkipTLSVerifyVal != "" {
@@ -158,37 +141,17 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	if insecureSkipTLSVerify {
-		defaultTransport := http.DefaultTransport.(*http.Transport)
-		serverConfig.HTTPClient = &http.Client{
-			// Copied from net/http
-			Transport: &http.Transport{
-				Proxy:                 defaultTransport.Proxy,
-				DialContext:           defaultTransport.DialContext,
-				MaxIdleConns:          defaultTransport.MaxIdleConns,
-				IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-				TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-				ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-				// Set insecureSkipVerify true
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-				},
-			},
-		}
-	}
-
-	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile, enableSharedConfig)
+	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, insecureSkipTLSVerify, caCert)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
-	serverSession, err := getSession(sessionOptions)
+	client, err := newS3Client(cfg, s3URL, s3ForcePathStyle)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
-
-	o.s3 = s3.New(serverSession)
-	o.s3Uploader = s3manager.NewUploader(serverSession)
+	o.s3 = client
+	o.s3Uploader = manager.NewUploader(client)
 	o.kmsKeyID = kmsKeyID
 	o.serverSideEncryption = serverSideEncryption
 
@@ -204,33 +167,16 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		o.sseCustomerKey = customerKey
 	}
 
-	if signatureVersion != "" {
-		if !isValidSignatureVersion(signatureVersion) {
-			return errors.Errorf("invalid signature version: %s", signatureVersion)
-		}
-		o.signatureVersion = signatureVersion
-	}
-
 	if publicURL != "" {
-		publicConfig, err := newAWSConfig(publicURL, region, s3ForcePathStyle)
+		publicClient, err := newS3Client(cfg, publicURL, s3ForcePathStyle)
 		if err != nil {
 			return err
 		}
 
-		publicSessionOptions, err := newSessionOptions(*publicConfig, credentialProfile, caCert, credentialsFile, enableSharedConfig)
-		if err != nil {
-			return err
-		}
-
-		publicSession, err := getSession(publicSessionOptions)
-		if err != nil {
-			return err
-		}
-		o.preSignS3 = s3.New(publicSession)
+		o.preSignS3 = s3.NewPresignClient(publicClient)
 	} else {
-		o.preSignS3 = o.s3
+		o.preSignS3 = s3.NewPresignClient(client)
 	}
-
 	return nil
 }
 
@@ -262,77 +208,10 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 	return key, nil
 }
 
-// newSessionOptions creates a session.Options with the given config and profile. If
-// caCert and credentialsFile are provided, these will be used for the CustomCABundle
-// and the credentials for the session.
-func newSessionOptions(config aws.Config, profile, caCert, credentialsFile, enableSharedConfig string) (session.Options, error) {
-	sessionOptions := session.Options{Config: config, Profile: profile}
-	if caCert != "" {
-		sessionOptions.CustomCABundle = strings.NewReader(caCert)
-	}
-
-	if credentialsFile == "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "" {
-		credentialsFile = os.Getenv("AWS_SHARED_CREDENTIALS_FILE")
-	}
-
-	if credentialsFile != "" {
-		if _, err := os.Stat(credentialsFile); err != nil {
-			if os.IsNotExist(err) {
-				return session.Options{}, errors.Wrapf(err, "provided credentialsFile does not exist")
-			}
-			return session.Options{}, errors.Wrapf(err, "could not get credentialsFile info")
-		}
-		sessionOptions.SharedConfigFiles = append(sessionOptions.SharedConfigFiles, credentialsFile)
-		sessionOptions.SharedConfigState = session.SharedConfigEnable
-	}
-
-	return sessionOptions, nil
-}
-
-func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) {
-	awsConfig := aws.NewConfig().
-		WithRegion(region).
-		WithS3ForcePathStyle(forcePathStyle)
-
-	if url != "" {
-		if !IsValidS3URLScheme(url) {
-			return nil, errors.Errorf("Invalid s3 url %s, URL must be valid according to https://golang.org/pkg/net/url/#Parse and start with http:// or https://", url)
-		}
-
-		awsConfig = awsConfig.WithEndpointResolver(
-			endpoints.ResolverFunc(func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
-				if service == s3.EndpointsID {
-					return endpoints.ResolvedEndpoint{
-						URL: url,
-					}, nil
-				}
-
-				return endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
-			}),
-		)
-	}
-
-	return awsConfig, nil
-}
-
-// takes AWS session options to create a new session
-func getSession(options session.Options) (*session.Session, error) {
-	sess, err := session.NewSessionWithOptions(options)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	if _, err := sess.Config.Credentials.Get(); err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return sess, nil
-}
-
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
-	req := &s3manager.UploadInput{
-		Bucket: &bucket,
-		Key:    &key,
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
 		Body:   body,
 	}
 
@@ -340,23 +219,21 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	// if kmsKeyID is not empty, assume a server-side encryption (SSE)
 	// algorithm of "aws:kms"
 	case o.kmsKeyID != "":
-		req.ServerSideEncryption = aws.String("aws:kms")
-		req.SSEKMSKeyId = &o.kmsKeyID
+		input.ServerSideEncryption = "aws:kms"
+		input.SSEKMSKeyId = &o.kmsKeyID
 	// if sseCustomerKey is not empty, assume SSE-C encryption with AES256 algorithm
 	case o.sseCustomerKey != "":
-		req.SSECustomerAlgorithm = aws.String("AES256")
-		req.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerAlgorithm = aws.String("AES256")
+		input.SSECustomerKey = &o.sseCustomerKey
 	// otherwise, use the SSE algorithm specified, if any
 	case o.serverSideEncryption != "":
-		req.ServerSideEncryption = aws.String(o.serverSideEncryption)
+		input.ServerSideEncryption = types.ServerSideEncryption(o.serverSideEncryption)
 	}
 
-	_, err := o.s3Uploader.Upload(req)
+	_, err := o.s3Uploader.Upload(context.Background(), input)
 
 	return errors.Wrapf(err, "error putting object %s", key)
 }
-
-const notFoundCode = "NotFound"
 
 // ObjectExists checks if there is an object with the given key in the object storage bucket.
 func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
@@ -367,34 +244,28 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 		},
 	)
 
-	req := &s3.HeadObjectInput{
+	input := &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	}
 
 	if o.sseCustomerKey != "" {
-		req.SSECustomerAlgorithm = aws.String("AES256")
-		req.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerAlgorithm = aws.String("AES256")
+		input.SSECustomerKey = &o.sseCustomerKey
 	}
 
 	log.Debug("Checking if object exists")
-	if _, err := o.s3.HeadObject(req); err != nil {
+	if _, err := o.s3.HeadObject(context.Background(), input); err != nil {
 		log.Debug("Checking for AWS specific error information")
-		if aerr, ok := err.(awserr.Error); ok {
+		var ne *types.NotFound
+		if errors.As(err, &ne) {
 			log.WithFields(
 				logrus.Fields{
-					"code":    aerr.Code(),
-					"message": aerr.Message(),
+					"code":    ne.ErrorCode(),
+					"message": ne.ErrorMessage(),
 				},
-			).Debugf("awserr.Error contents (origErr=%v)", aerr.OrigErr())
-
-			// The code will be NotFound if the key doesn't exist.
-			// See https://github.com/aws/aws-sdk-go/issues/1208 and https://github.com/aws/aws-sdk-go/pull/1213.
-			log.Debugf("Checking for code=%s", notFoundCode)
-			if aerr.Code() == notFoundCode {
-				log.Debug("Object doesn't exist - got not found")
-				return false, nil
-			}
+			).Debug("Object doesn't exist - got not found")
+			return false, nil
 		}
 		return false, errors.WithStack(err)
 	}
@@ -404,63 +275,61 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 }
 
 func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
-	req := &s3.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
 	}
 
 	if o.sseCustomerKey != "" {
-		req.SSECustomerAlgorithm = aws.String("AES256")
-		req.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerAlgorithm = aws.String("AES256")
+		input.SSECustomerKey = &o.sseCustomerKey
 	}
 
-	res, err := o.s3.GetObject(req)
+	output, err := o.s3.GetObject(context.Background(), input)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error getting object %s", key)
 	}
 
-	return res.Body, nil
+	return output.Body, nil
 }
 
 func (o *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {
-	req := &s3.ListObjectsV2Input{
-		Bucket:    &bucket,
-		Prefix:    &prefix,
-		Delimiter: &delimiter,
+	input := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String(delimiter),
 	}
-
 	var ret []string
-	err := o.s3.ListObjectsV2Pages(req, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	p := s3.NewListObjectsV2Paginator(o.s3, input)
+	for p.HasMorePages() {
+		page, err := p.NextPage(context.Background())
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
 		for _, prefix := range page.CommonPrefixes {
 			ret = append(ret, *prefix.Prefix)
 		}
-		return !lastPage
-	})
-	if err != nil {
-		return nil, errors.WithStack(err)
 	}
-
 	return ret, nil
 }
 
 func (o *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
-	req := &s3.ListObjectsV2Input{
-		Bucket: &bucket,
-		Prefix: &prefix,
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
 	}
 
 	var ret []string
-	err := o.s3.ListObjectsV2Pages(req, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	p := s3.NewListObjectsV2Paginator(o.s3, input)
+	for p.HasMorePages() {
+		page, err := p.NextPage(context.Background())
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
 		for _, obj := range page.Contents {
 			ret = append(ret, *obj.Key)
 		}
-		return !lastPage
-	})
-
-	if err != nil {
-		return nil, errors.WithStack(err)
 	}
-
 	// ensure that returned objects are in a consistent order so that the deletion logic deletes the objects before
 	// the pseudo-folder prefix object for s3 providers (such as Quobyte) that return the pseudo-folder as an object.
 	// See https://github.com/vmware-tanzu/velero/pull/999
@@ -470,26 +339,26 @@ func (o *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
 }
 
 func (o *ObjectStore) DeleteObject(bucket, key string) error {
-	req := &s3.DeleteObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
 	}
 
-	_, err := o.s3.DeleteObject(req)
+	_, err := o.s3.DeleteObject(context.Background(), input)
 
 	return errors.Wrapf(err, "error deleting object %s", key)
 }
 
 func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
-	req, _ := o.preSignS3.GetObjectRequest(&s3.GetObjectInput{
+	req, err := o.preSignS3.PresignGetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = ttl
 	})
 
-	if o.signatureVersion == "1" {
-		req.Handlers.Sign.Remove(v4.SignRequestHandler)
-		req.Handlers.Sign.PushBackNamed(v1SignRequestHandler)
+	if err != nil {
+		return "", errors.WithStack(err)
 	}
-
-	return req.Presign(ttl)
+	return req.URL, nil
 }

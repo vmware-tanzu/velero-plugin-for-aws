@@ -17,14 +17,15 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -47,7 +48,7 @@ var iopsVolumeTypes = sets.NewString("io1", "io2")
 
 type VolumeSnapshotter struct {
 	log logrus.FieldLogger
-	ec2 *ec2.EC2
+	ec2 *ec2.Client
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -62,69 +63,64 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	region := config[regionKey]
 	credentialProfile := config[credentialProfileKey]
 	credentialsFile := config[credentialsFileKey]
-	enableSharedConfig := config[enableSharedConfigKey]
+	//	enableSharedConfig := config[enableSharedConfigKey]
 
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
 
-	awsConfig := aws.NewConfig().WithRegion(region)
-	sessionOptions, err := newSessionOptions(*awsConfig, credentialProfile, "", credentialsFile, enableSharedConfig)
+	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, false, "")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
-	sess, err := getSession(sessionOptions)
-	if err != nil {
-		return err
-	}
-
-	b.ec2 = ec2.New(sess)
+	b.ec2 = ec2.NewFromConfig(cfg)
 
 	return nil
 }
 
 func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, volumeAZ string, iops *int64) (volumeID string, err error) {
 	// describe the snapshot so we can apply its tags to the volume
-	snapReq := &ec2.DescribeSnapshotsInput{
-		SnapshotIds: []*string{&snapshotID},
+	descSnapInput := &ec2.DescribeSnapshotsInput{
+		SnapshotIds: []string{snapshotID},
 	}
-	snapRes, err := b.ec2.DescribeSnapshots(snapReq)
+	descSnapOutput, err := b.ec2.DescribeSnapshots(context.Background(), descSnapInput)
 	if err != nil {
 		b.log.Infof("failed to describe snap shot: %v", err)
 
 		return "", errors.WithStack(err)
 	}
 
-	if count := len(snapRes.Snapshots); count != 1 {
+	if count := len(descSnapOutput.Snapshots); count != 1 {
 		return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
 	}
 
 	// filter tags through getTagsForCluster() function in order to apply
 	// proper ownership tags to restored volumes
-	req := &ec2.CreateVolumeInput{
+	input := &ec2.CreateVolumeInput{
 		SnapshotId:       &snapshotID,
 		AvailabilityZone: &volumeAZ,
-		VolumeType:       &volumeType,
-		Encrypted:        snapRes.Snapshots[0].Encrypted,
-		TagSpecifications: []*ec2.TagSpecification{
+		VolumeType:       types.VolumeType(volumeType),
+		Encrypted:        descSnapOutput.Snapshots[0].Encrypted,
+		TagSpecifications: []types.TagSpecification{
 			{
-				ResourceType: aws.String(ec2.ResourceTypeVolume),
-				Tags:         getTagsForCluster(snapRes.Snapshots[0].Tags),
+				ResourceType: types.ResourceTypeVolume,
+				Tags:         getTagsForCluster(descSnapOutput.Snapshots[0].Tags),
 			},
 		},
 	}
 
 	if iopsVolumeTypes.Has(volumeType) && iops != nil {
-		req.Iops = iops
+		iops32 := int32(*iops)
+		input.Iops = &iops32
 	}
 
-	res, err := b.ec2.CreateVolume(req)
+	output, err := b.ec2.CreateVolume(context.Background(), input)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 
-	return *res.VolumeId, nil
+	return *output.VolumeId, nil
 }
 
 func (b *VolumeSnapshotter) GetVolumeInfo(volumeID, volumeAZ string) (string, *int64, error) {
@@ -135,34 +131,33 @@ func (b *VolumeSnapshotter) GetVolumeInfo(volumeID, volumeAZ string) (string, *i
 
 	var (
 		volumeType string
-		iops       *int64
+		iops64     int64
 	)
 
-	if volumeInfo.VolumeType != nil {
-		volumeType = *volumeInfo.VolumeType
-	}
+	volumeType = string(volumeInfo.VolumeType)
 
 	if iopsVolumeTypes.Has(volumeType) && volumeInfo.Iops != nil {
-		iops = volumeInfo.Iops
+		iops32 := volumeInfo.Iops
+		iops64 = int64(*iops32)
 	}
 
-	return volumeType, iops, nil
+	return volumeType, &iops64, nil
 }
 
-func (b *VolumeSnapshotter) describeVolume(volumeID string) (*ec2.Volume, error) {
-	req := &ec2.DescribeVolumesInput{
-		VolumeIds: []*string{&volumeID},
+func (b *VolumeSnapshotter) describeVolume(volumeID string) (types.Volume, error) {
+	input := &ec2.DescribeVolumesInput{
+		VolumeIds: []string{volumeID},
 	}
 
-	res, err := b.ec2.DescribeVolumes(req)
+	output, err := b.ec2.DescribeVolumes(context.Background(), input)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return types.Volume{}, errors.WithStack(err)
 	}
-	if count := len(res.Volumes); count != 1 {
-		return nil, errors.Errorf("Expected one volume from DescribeVolumes for volume ID %v, got %v", volumeID, count)
+	if count := len(output.Volumes); count != 1 {
+		return types.Volume{}, errors.Errorf("Expected one volume from DescribeVolumes for volume ID %v, got %v", volumeID, count)
 	}
 
-	return res.Volumes[0], nil
+	return output.Volumes[0], nil
 }
 
 func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[string]string) (string, error) {
@@ -172,11 +167,11 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 		return "", err
 	}
 
-	res, err := b.ec2.CreateSnapshot(&ec2.CreateSnapshotInput{
+	res, err := b.ec2.CreateSnapshot(context.Background(), &ec2.CreateSnapshotInput{
 		VolumeId: &volumeID,
-		TagSpecifications: []*ec2.TagSpecification{
+		TagSpecifications: []types.TagSpecification{
 			{
-				ResourceType: aws.String(ec2.ResourceTypeSnapshot),
+				ResourceType: types.ResourceTypeSnapshot,
 				Tags:         getTags(tags, volumeInfo.Tags),
 			},
 		},
@@ -188,8 +183,8 @@ func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[s
 	return *res.SnapshotId, nil
 }
 
-func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
-	var result []*ec2.Tag
+func getTagsForCluster(snapshotTags []types.Tag) []types.Tag {
+	var result []types.Tag
 
 	clusterName, haveAWSClusterNameEnvVar := os.LookupEnv("AWS_CLUSTER_NAME")
 
@@ -211,8 +206,8 @@ func getTagsForCluster(snapshotTags []*ec2.Tag) []*ec2.Tag {
 	return result
 }
 
-func getTags(veleroTags map[string]string, volumeTags []*ec2.Tag) []*ec2.Tag {
-	var result []*ec2.Tag
+func getTags(veleroTags map[string]string, volumeTags []types.Tag) []types.Tag {
+	var result []types.Tag
 
 	// set Velero-assigned tags
 	for k, v := range veleroTags {
@@ -233,23 +228,26 @@ func getTags(veleroTags map[string]string, volumeTags []*ec2.Tag) []*ec2.Tag {
 	return result
 }
 
-func ec2Tag(key, val string) *ec2.Tag {
-	return &ec2.Tag{Key: &key, Value: &val}
+func ec2Tag(key, val string) types.Tag {
+	return types.Tag{Key: &key, Value: &val}
 }
 
 func (b *VolumeSnapshotter) DeleteSnapshot(snapshotID string) error {
-	req := &ec2.DeleteSnapshotInput{
+	input := &ec2.DeleteSnapshotInput{
 		SnapshotId: &snapshotID,
 	}
-
-	_, err := b.ec2.DeleteSnapshot(req)
+	_, err := b.ec2.DeleteSnapshot(context.Background(), input)
 
 	// if it's a NotFound error, we don't need to return an error
 	// since the snapshot is not there.
 	// see https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
-	if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "InvalidSnapshot.NotFound" {
-		return nil
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		if "InvalidSnapshot.NotFound" == apiErr.ErrorCode() {
+			return nil
+		}
 	}
+
 	if err != nil {
 		return errors.WithStack(err)
 	}

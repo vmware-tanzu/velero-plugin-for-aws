@@ -17,51 +17,40 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsValidSignatureVersion(t *testing.T) {
-	assert.True(t, isValidSignatureVersion("1"))
-	assert.True(t, isValidSignatureVersion("4"))
-	assert.False(t, isValidSignatureVersion("3"))
-}
-
 type mockS3 struct {
 	mock.Mock
 }
 
-func (m *mockS3) HeadObject(input *s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
-	args := m.Called(input)
+func (m *mockS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	args := m.Called(ctx, input)
 	return args.Get(0).(*s3.HeadObjectOutput), args.Error(1)
 }
 
-func (m *mockS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-	args := m.Called(input)
+func (m *mockS3) GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	args := m.Called(ctx, input)
 	return args.Get(0).(*s3.GetObjectOutput), args.Error(1)
 }
 
-func (m *mockS3) ListObjectsV2Pages(input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool) error {
-	args := m.Called(input, fn)
-	return args.Error(0)
+func (m *mockS3) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	args := m.Called(ctx, input)
+	return args.Get(0).(*s3.ListObjectsV2Output), args.Error(1)
 }
 
-func (m *mockS3) DeleteObject(input *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
-	args := m.Called(input)
+func (m *mockS3) DeleteObject(ctx context.Context, input *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	args := m.Called(ctx, input)
 	return args.Get(0).(*s3.DeleteObjectOutput), args.Error(1)
-}
-
-func (m *mockS3) GetObjectRequest(input *s3.GetObjectInput) (req *request.Request, output *s3.GetObjectOutput) {
-	args := m.Called(input)
-	return args.Get(0).(*request.Request), args.Get(1).(*s3.GetObjectOutput)
 }
 
 func TestObjectExists(t *testing.T) {
@@ -77,8 +66,10 @@ func TestObjectExists(t *testing.T) {
 			expectedExists: true,
 		},
 		{
-			name:           "doesn't exist",
-			errorResponse:  awserr.New(s3.ErrCodeNoSuchKey, "no such key", nil),
+			name: "doesn't exist",
+			errorResponse: &types.NoSuchKey{
+				Message: aws.String("no such key"),
+			},
 			expectedExists: false,
 			expectedError:  "NoSuchKey: no such key",
 		},
@@ -107,7 +98,7 @@ func TestObjectExists(t *testing.T) {
 				Key:    aws.String(key),
 			}
 
-			s.On("HeadObject", req).Return(&s3.HeadObjectOutput{}, tc.errorResponse)
+			s.On("HeadObject", context.Background(), req).Return(&s3.HeadObjectOutput{}, tc.errorResponse)
 
 			exists, err := o.ObjectExists(bucket, key)
 
