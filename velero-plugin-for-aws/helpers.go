@@ -20,36 +20,30 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws/endpoints"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/config"
+	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pkg/errors"
 )
 
 // GetBucketRegion returns the AWS region that a bucket is in, or an error
 // if the region cannot be determined.
-func GetBucketRegion(bucket string) (string, error) {
-	var region string
-
-	session, err := session.NewSession()
+func GetBucketRegion(bucket string, usePathStyle bool) (string, error) {
+	cfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
-
-	for _, partition := range endpoints.DefaultPartitions() {
-		for regionHint := range partition.Regions() {
-			region, _ = s3manager.GetBucketRegion(context.Background(), session, bucket, regionHint)
-
-			// we only need to try a single region hint per partition, so break after the first
-			break
-		}
-
-		if region != "" {
-			return region, nil
-		}
+	client := s3.NewFromConfig(cfg)
+	region, err := s3manager.GetBucketRegion(context.Background(), client, bucket, func(o *s3.Options) {
+		o.UsePathStyle = usePathStyle
+	})
+	if err != nil {
+		return "", err
 	}
-
-	return "", errors.New("unable to determine bucket's region")
+	if region == "" {
+		return "", errors.New("unable to determine bucket's region")
+	}
+	return region, nil
 }
 
 // IsValidS3URLScheme returns true if the scheme is http:// or https://

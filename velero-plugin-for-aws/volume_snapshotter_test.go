@@ -18,11 +18,11 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"os"
 	"sort"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,12 +76,12 @@ func TestGetVolumeIDForCSI(t *testing.T) {
 		log: logrus.New(),
 	}
 
-	cases := [] struct {
-		name string
+	cases := []struct {
+		name    string
 		csiJSON string
-		want string
+		want    string
 		wantErr bool
-	} {
+	}{
 		{
 			name: "aws csi driver",
 			csiJSON: `{
@@ -89,7 +89,7 @@ func TestGetVolumeIDForCSI(t *testing.T) {
 				"fsType": "ext4",
 				"volumeHandle": "vol-0866e1c99bd130a2c"
 			}`,
-			want: "vol-0866e1c99bd130a2c",
+			want:    "vol-0866e1c99bd130a2c",
 			wantErr: false,
 		},
 		{
@@ -99,13 +99,13 @@ func TestGetVolumeIDForCSI(t *testing.T) {
 				"fsType": "ext4",
 				"volumeHandle": "vol-0866e1c99bd130a2c"
 			}`,
-			want: "",
+			want:    "",
 			wantErr: false,
 		},
 	}
-	for _ , tt := range cases {
-		t.Run(tt.name, func(t *testing.T){
-			res:=&unstructured.Unstructured{
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &unstructured.Unstructured{
 				Object: map[string]interface{}{},
 			}
 			csi := map[string]interface{}{}
@@ -191,35 +191,35 @@ func TestSetVolumeIDForCSI(t *testing.T) {
 		log: logrus.New(),
 	}
 
-	cases := [] struct {
-		name string
-		csiJSON string
+	cases := []struct {
+		name     string
+		csiJSON  string
 		volumeID string
-		wantErr bool
+		wantErr  bool
 	}{
 		{
 			name: "set ID to CSI with aws EBS CSI driver",
-			csiJSON:  `{
+			csiJSON: `{
 				"driver": "ebs.csi.aws.com",
 				"fsType": "ext4",
 				"volumeHandle": "vol-0866e1c99bd130a2c"
 			}`,
 			volumeID: "vol-abcd",
-			wantErr: false,
+			wantErr:  false,
 		},
 		{
 			name: "set ID to CSI with EFS CSI driver",
-			csiJSON:  `{
+			csiJSON: `{
 				"driver": "efs.csi.aws.com",
 				"fsType": "ext4"
 			}`,
 			volumeID: "vol-abcd",
-			wantErr: true,
+			wantErr:  true,
 		},
 	}
-	for _ , tt := range cases {
-		t.Run(tt.name, func(t *testing.T){
-			res:=&unstructured.Unstructured{
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &unstructured.Unstructured{
 				Object: map[string]interface{}{},
 			}
 			csi := map[string]interface{}{}
@@ -244,8 +244,8 @@ func TestGetTagsForCluster(t *testing.T) {
 	tests := []struct {
 		name         string
 		isNameSet    bool
-		snapshotTags []*ec2.Tag
-		expected     []*ec2.Tag
+		snapshotTags []types.Tag
+		expected     []types.Tag
 	}{
 		{
 			name:         "degenerate case (no tags)",
@@ -256,12 +256,12 @@ func TestGetTagsForCluster(t *testing.T) {
 		{
 			name:      "cluster tags exist and remain set",
 			isNameSet: false,
-			snapshotTags: []*ec2.Tag{
+			snapshotTags: []types.Tag{
 				ec2Tag("KubernetesCluster", "old-cluster"),
 				ec2Tag("kubernetes.io/cluster/old-cluster", "owned"),
 				ec2Tag("aws-key", "aws-val"),
 			},
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("KubernetesCluster", "old-cluster"),
 				ec2Tag("kubernetes.io/cluster/old-cluster", "owned"),
 				ec2Tag("aws-key", "aws-val"),
@@ -271,7 +271,7 @@ func TestGetTagsForCluster(t *testing.T) {
 			name:         "cluster tags only get applied",
 			isNameSet:    true,
 			snapshotTags: nil,
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("KubernetesCluster", "current-cluster"),
 				ec2Tag("kubernetes.io/cluster/current-cluster", "owned"),
 			},
@@ -279,8 +279,8 @@ func TestGetTagsForCluster(t *testing.T) {
 		{
 			name:         "non-overlaping cluster and snapshot tags both get applied",
 			isNameSet:    true,
-			snapshotTags: []*ec2.Tag{ec2Tag("aws-key", "aws-val")},
-			expected: []*ec2.Tag{
+			snapshotTags: []types.Tag{ec2Tag("aws-key", "aws-val")},
+			expected: []types.Tag{
 				ec2Tag("KubernetesCluster", "current-cluster"),
 				ec2Tag("kubernetes.io/cluster/current-cluster", "owned"),
 				ec2Tag("aws-key", "aws-val"),
@@ -288,12 +288,12 @@ func TestGetTagsForCluster(t *testing.T) {
 		},
 		{name: "overlaping cluster tags, current cluster tags take precedence",
 			isNameSet: true,
-			snapshotTags: []*ec2.Tag{
+			snapshotTags: []types.Tag{
 				ec2Tag("KubernetesCluster", "old-name"),
 				ec2Tag("kubernetes.io/cluster/old-name", "owned"),
 				ec2Tag("aws-key", "aws-val"),
 			},
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("KubernetesCluster", "current-cluster"),
 				ec2Tag("kubernetes.io/cluster/current-cluster", "owned"),
 				ec2Tag("aws-key", "aws-val"),
@@ -329,8 +329,8 @@ func TestGetTags(t *testing.T) {
 	tests := []struct {
 		name       string
 		veleroTags map[string]string
-		volumeTags []*ec2.Tag
-		expected   []*ec2.Tag
+		volumeTags []types.Tag
+		expected   []types.Tag
 	}{
 		{
 			name:       "degenerate case (no tags)",
@@ -345,7 +345,7 @@ func TestGetTags(t *testing.T) {
 				"velero-key2": "velero-val2",
 			},
 			volumeTags: nil,
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("velero-key1", "velero-val1"),
 				ec2Tag("velero-key2", "velero-val2"),
 			},
@@ -353,11 +353,11 @@ func TestGetTags(t *testing.T) {
 		{
 			name:       "volume tags only get applied",
 			veleroTags: nil,
-			volumeTags: []*ec2.Tag{
+			volumeTags: []types.Tag{
 				ec2Tag("aws-key1", "aws-val1"),
 				ec2Tag("aws-key2", "aws-val2"),
 			},
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("aws-key1", "aws-val1"),
 				ec2Tag("aws-key2", "aws-val2"),
 			},
@@ -365,8 +365,8 @@ func TestGetTags(t *testing.T) {
 		{
 			name:       "non-overlapping velero and volume tags both get applied",
 			veleroTags: map[string]string{"velero-key": "velero-val"},
-			volumeTags: []*ec2.Tag{ec2Tag("aws-key", "aws-val")},
-			expected: []*ec2.Tag{
+			volumeTags: []types.Tag{ec2Tag("aws-key", "aws-val")},
+			expected: []types.Tag{
 				ec2Tag("velero-key", "velero-val"),
 				ec2Tag("aws-key", "aws-val"),
 			},
@@ -377,11 +377,11 @@ func TestGetTags(t *testing.T) {
 				"velero-key":      "velero-val",
 				"overlapping-key": "velero-val",
 			},
-			volumeTags: []*ec2.Tag{
+			volumeTags: []types.Tag{
 				ec2Tag("aws-key", "aws-val"),
 				ec2Tag("overlapping-key", "aws-val"),
 			},
-			expected: []*ec2.Tag{
+			expected: []types.Tag{
 				ec2Tag("velero-key", "velero-val"),
 				ec2Tag("overlapping-key", "velero-val"),
 				ec2Tag("aws-key", "aws-val"),
