@@ -49,6 +49,7 @@ const (
 	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
 	caCertKey                    = "caCert"
 	enableSharedConfigKey        = "enableSharedConfig"
+	taggingKey                   = "tagging"
 )
 
 type s3Interface interface {
@@ -71,6 +72,7 @@ type ObjectStore struct {
 	sseCustomerKey       string
 	signatureVersion     string
 	serverSideEncryption string
+	tagging              string
 }
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
@@ -91,6 +93,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
 		enableSharedConfigKey,
+		taggingKey,
 	); err != nil {
 		return err
 	}
@@ -106,7 +109,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		credentialsFile           = config[credentialsFileKey]
 		serverSideEncryption      = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
-
+		tagging                   = config[taggingKey]
 		// note that bucket is automatically added to the config map
 		// by the server from the ObjectStorageProviderConfig so
 		// doesn't need to be explicitly set by the user within
@@ -154,6 +157,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	o.s3Uploader = manager.NewUploader(client)
 	o.kmsKeyID = kmsKeyID
 	o.serverSideEncryption = serverSideEncryption
+	o.tagging = tagging
 
 	if customerKeyEncryptionFile != "" && kmsKeyID != "" {
 		return errors.Wrapf(err, "you cannot use %s and %s at the same time", kmsKeyIDKey, customerKeyEncryptionFileKey)
@@ -176,6 +180,12 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		o.preSignS3 = s3.NewPresignClient(publicClient)
 	} else {
 		o.preSignS3 = s3.NewPresignClient(client)
+	}
+	if tagging != "" {
+		err = CheckTags(tagging)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -210,9 +220,10 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	input := &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   body,
+		Bucket:  aws.String(bucket),
+		Key:     aws.String(key),
+		Body:    body,
+		Tagging: aws.String(o.tagging),
 	}
 
 	switch {
