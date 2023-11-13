@@ -75,7 +75,12 @@ spec:
     
     # Specify the file that contains the SSE-C customer key to enable customer key encryption of the backups
     # stored in S3. The referenced file should contain a 32-byte string.
-    #
+    #  
+    # The customerKeyEncryptionFile points to a mounted secret within the velero container.
+    # Add the below values to the velero cloud-credentials secret:
+    # customer-key: <your_b64_encoded_32byte_string>
+    # The default value below points to the already mounted secret.
+    # 
     # Cannot be used in conjunction with kmsKeyId.
     #
     # Optional (defaults to "", which means SSE-C is disabled).
