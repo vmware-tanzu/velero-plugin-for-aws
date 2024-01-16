@@ -45,12 +45,18 @@ const (
 	signatureVersionKey          = "signatureVersion"
 	credentialsFileKey           = "credentialsFile"
 	credentialProfileKey         = "profile"
+	kubernetesSecretKey          = "kubernetesSecret"
 	serverSideEncryptionKey      = "serverSideEncryption"
 	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
 	caCertKey                    = "caCert"
 	enableSharedConfigKey        = "enableSharedConfig"
 	taggingKey                   = "tagging"
 )
+
+type CredentialsConfig struct {
+	useKubernetesSecret bool
+	secretName          string
+}
 
 type s3Interface interface {
 	HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
@@ -90,6 +96,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		signatureVersionKey,
 		credentialsFileKey,
 		credentialProfileKey,
+		kubernetesSecretKey,
 		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
 		enableSharedConfigKey,
@@ -107,6 +114,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		s3ForcePathStyleVal       = config[s3ForcePathStyleKey]
 		credentialProfile         = config[credentialProfileKey]
 		credentialsFile           = config[credentialsFileKey]
+		kubernetesSecret          = config[kubernetesSecretKey]
 		serverSideEncryption      = config[serverSideEncryptionKey]
 		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
 		tagging                   = config[taggingKey]
@@ -144,7 +152,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, insecureSkipTLSVerify, caCert)
+	credentialsConfig := CredentialsConfig{
+		useKubernetesSecret: kubernetesSecret != "",
+		secretName:          kubernetesSecret,
+	}
+	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, insecureSkipTLSVerify, caCert, credentialsConfig)
 	if err != nil {
 		return errors.WithStack(err)
 	}

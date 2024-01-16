@@ -69,7 +69,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
 
-	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, false, "")
+	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, false, "", CredentialsConfig{})
 	if err != nil {
 		return errors.WithStack(err)
 	}

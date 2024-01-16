@@ -7,13 +7,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pkg/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"net/http"
 	"os"
 )
 
-func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify bool, caCert string) (aws.Config, error) {
+func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify bool, caCert string, credentialsConfig CredentialsConfig) (aws.Config, error) {
 	empty := aws.Config{}
 	client := awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
 		if len(caCert) > 0 {
@@ -33,6 +37,16 @@ func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify
 		config.WithRegion(region),
 		config.WithSharedConfigProfile(profile),
 		config.WithHTTPClient(client),
+	}
+
+	if credentialsConfig.useKubernetesSecret {
+		bucketCredentials, err := loadCredentialsFromSecret(credentialsConfig.secretName)
+		if err != nil {
+			return empty, errors.Wrapf(err, "could not load credentials from secret %s", credentialsConfig.secretName)
+		}
+		opts = append(opts, config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: bucketCredentials,
+		}))
 	}
 
 	if credentialsFile == "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "" {
@@ -79,4 +93,31 @@ func newS3Client(cfg aws.Config, url string, forcePathStyle bool) (*s3.Client, e
 	}
 
 	return s3.NewFromConfig(cfg, opts...), nil
+}
+
+func loadCredentialsFromSecret(name string) (aws.Credentials, error) {
+	client, err := newKubernetesClient()
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+	secret, err := client.CoreV1().Secrets("velero").Get(context.Background(), name, v1.GetOptions{})
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+	return aws.Credentials{
+		AccessKeyID:     string(secret.Data["AWS_ACCESS_KEY_ID"]),
+		SecretAccessKey: string(secret.Data["AWS_SECRET_ACCESS_KEY"]),
+	}, nil
+}
+
+func newKubernetesClient() (*kubernetes.Clientset, error) {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return clientset, nil
 }
