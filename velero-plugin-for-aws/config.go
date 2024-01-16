@@ -50,6 +50,10 @@ func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify
 			// To support the existing use case where config file is passed
 			// as credentials of a BSL
 			config.WithSharedConfigFiles([]string{credentialsFile}))
+		// unset the env variables to bypass the role assumption when IRSA is configured
+		os.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", "")
+		os.Setenv("AWS_ROLE_SESSION_NAME", "")
+		os.Setenv("AWS_ROLE_ARN", "")
 	}
 
 	awsConfig, err := config.LoadDefaultConfig(context.Background(), opts...)
