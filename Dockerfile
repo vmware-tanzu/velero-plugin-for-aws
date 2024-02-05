@@ -30,6 +30,7 @@ RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
     CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws && \
     CGO_ENABLED=0 go build -v -o /go/bin/cp-plugin ./hack/cp-plugin
 FROM scratch
+LABEL org.opencontainers.image.source="https://github.com/vmware-tanzu/velero-plugin-for-aws"
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
 COPY --from=build /go/bin/cp-plugin /bin/cp-plugin
 USER 65532:65532
