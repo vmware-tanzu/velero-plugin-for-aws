@@ -50,6 +50,7 @@ const (
 	caCertKey                    = "caCert"
 	enableSharedConfigKey        = "enableSharedConfig"
 	taggingKey                   = "tagging"
+	checksumAlgKey               = "checksumAlgorithm"
 )
 
 type s3Interface interface {
@@ -73,6 +74,7 @@ type ObjectStore struct {
 	signatureVersion     string
 	serverSideEncryption string
 	tagging              string
+	checksumAlg          string
 }
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
@@ -94,6 +96,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		insecureSkipTLSVerifyKey,
 		enableSharedConfigKey,
 		taggingKey,
+		checksumAlgKey,
 	); err != nil {
 		return err
 	}
@@ -187,7 +190,20 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 	}
+	if alg, ok := config[checksumAlgKey]; ok {
+		if !validChecksumAlg(alg) {
+			return errors.Errorf("invalid checksum algorithm: %s", alg)
+		}
+		o.checksumAlg = alg
+	} else {
+		o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
+	}
 	return nil
+}
+
+func validChecksumAlg(alg string) bool {
+	return alg == string(types.ChecksumAlgorithmCrc32) || alg == string(types.ChecksumAlgorithmCrc32c) ||
+		alg == string(types.ChecksumAlgorithmSha1) || alg == string(types.ChecksumAlgorithmSha256) || alg == ""
 }
 
 func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
@@ -239,6 +255,10 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	// otherwise, use the SSE algorithm specified, if any
 	case o.serverSideEncryption != "":
 		input.ServerSideEncryption = types.ServerSideEncryption(o.serverSideEncryption)
+	}
+
+	if o.checksumAlg != "" {
+		input.ChecksumAlgorithm = types.ChecksumAlgorithm(o.checksumAlg)
 	}
 
 	_, err := o.s3Uploader.Upload(context.Background(), input)
