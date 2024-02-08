@@ -113,7 +113,15 @@ spec:
 
     # Tags that need to be placed on AWS S3 objects. 
     # For example "Key1=Value1&Key2=Value2"
+    #
     # Optional (defaults to empty "")
     tagging: ""
 
+    # The checksum algorithm to use for uploading objects to S3.
+    # The Supported values are  "CRC32",  "CRC32C", "SHA1", "SHA256".
+    # If the value is set as empty string "", no checksum will be calculated and attached to 
+    # the request headers.
+    #
+    # Optional (defaults to "CRC32")
+    checksumAlgorithm: "CRC32"
 ```
