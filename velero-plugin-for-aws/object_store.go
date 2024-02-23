@@ -73,6 +73,7 @@ type ObjectStore struct {
 	signatureVersion     string
 	serverSideEncryption string
 	tagging              string
+	checksumAlg          string
 }
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
@@ -187,6 +188,8 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 	}
+	// TODO: Make it configurable in plugin v1.10
+	o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
 	return nil
 }
 
@@ -239,6 +242,10 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	// otherwise, use the SSE algorithm specified, if any
 	case o.serverSideEncryption != "":
 		input.ServerSideEncryption = types.ServerSideEncryption(o.serverSideEncryption)
+	}
+
+	if o.checksumAlg != "" {
+		input.ChecksumAlgorithm = types.ChecksumAlgorithm(o.checksumAlg)
 	}
 
 	_, err := o.s3Uploader.Upload(context.Background(), input)
