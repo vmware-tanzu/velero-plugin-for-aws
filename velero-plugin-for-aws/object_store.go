@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -127,24 +128,37 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
-	// AWS (not an alternate S3-compatible API) and region not
-	// explicitly specified: determine the bucket's region
-	if s3URL == "" && region == "" {
-		var err error
-		region, err = GetBucketRegion(bucket, s3ForcePathStyle)
-		if err != nil {
-			o.log.Errorf("Failed to get bucket region, bucket: %s, error: %v", bucket, err)
-			return err
-		}
-	}
-
 	if insecureSkipTLSVerifyVal != "" {
 		if insecureSkipTLSVerify, err = strconv.ParseBool(insecureSkipTLSVerifyVal); err != nil {
 			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
 		}
 	}
 
-	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, insecureSkipTLSVerify, caCert)
+	// AWS (not an alternate S3-compatible API) and region not
+	// explicitly specified: determine the bucket's region
+	if s3URL == "" && region == "" {
+		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		client, err := newS3Client(cfg, s3URL, s3ForcePathStyle)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		region, err = manager.GetBucketRegion(context.Background(), client, bucket)
+		if err != nil {
+			o.log.Errorf("Failed to determine bucket's region bucket: %s, error: %v", bucket, err)
+			return err
+		}
+		if region == "" {
+			return fmt.Errorf("unable to determine bucket's region, bucket: %s", bucket)
+		}
+	}
+
+	cfg, err := newConfigBuilder(o.log).WithRegion(region).
+		WithProfile(credentialProfile).
+		WithCredentialsFile(credentialsFile).
+		WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
 	if err != nil {
 		return errors.WithStack(err)
 	}
