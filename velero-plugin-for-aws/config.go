@@ -9,44 +9,40 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 )
 
-func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify bool, caCert string) (aws.Config, error) {
-	empty := aws.Config{}
-	client := awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
-		if len(caCert) > 0 {
-			caCertPool := x509.NewCertPool()
-			caCertPool.AppendCertsFromPEM([]byte(caCert))
-			if tr.TLSClientConfig == nil {
-				tr.TLSClientConfig = &tls.Config{
-					RootCAs: caCertPool,
-				}
-			} else {
-				tr.TLSClientConfig.RootCAs = caCertPool
-			}
-		}
-		tr.TLSClientConfig.InsecureSkipVerify = insecureSkipTLSVerify
-	})
-	opts := []func(*config.LoadOptions) error{
-		config.WithRegion(region),
-		config.WithSharedConfigProfile(profile),
-		config.WithHTTPClient(client),
-	}
+type configBuilder struct {
+	log       logrus.FieldLogger
+	opts      []func(*config.LoadOptions) error
+	credsFlag bool
+}
 
+func newConfigBuilder(logger logrus.FieldLogger) *configBuilder {
+	return &configBuilder{
+		log: logger,
+	}
+}
+
+func (cb *configBuilder) WithRegion(region string) *configBuilder {
+	cb.opts = append(cb.opts, config.WithRegion(region))
+	return cb
+}
+
+func (cb *configBuilder) WithProfile(profile string) *configBuilder {
+	cb.opts = append(cb.opts, config.WithSharedConfigProfile(profile))
+	return cb
+}
+
+func (cb *configBuilder) WithCredentialsFile(credentialsFile string) *configBuilder {
 	if credentialsFile == "" && os.Getenv("AWS_SHARED_CREDENTIALS_FILE") != "" {
 		credentialsFile = os.Getenv("AWS_SHARED_CREDENTIALS_FILE")
 	}
 
 	if credentialsFile != "" {
-		if _, err := os.Stat(credentialsFile); err != nil {
-			if os.IsNotExist(err) {
-				return empty, errors.Wrapf(err, "provided credentialsFile does not exist")
-			}
-			return empty, errors.Wrapf(err, "could not get credentialsFile info")
-		}
-		opts = append(opts, config.WithSharedCredentialsFiles([]string{credentialsFile}),
+		cb.opts = append(cb.opts, config.WithSharedCredentialsFiles([]string{credentialsFile}),
 			// To support the existing use case where config file is passed
 			// as credentials of a BSL
 			config.WithSharedConfigFiles([]string{credentialsFile}))
@@ -54,17 +50,42 @@ func newAWSConfig(region, profile, credentialsFile string, insecureSkipTLSVerify
 		os.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", "")
 		os.Setenv("AWS_ROLE_SESSION_NAME", "")
 		os.Setenv("AWS_ROLE_ARN", "")
+		cb.credsFlag = true
 	}
+	return cb
+}
 
-	awsConfig, err := config.LoadDefaultConfig(context.Background(), opts...)
+func (cb *configBuilder) WithTLSSettings(insecureSkipTLSVerify bool, caCert string) *configBuilder {
+	cb.opts = append(cb.opts, config.WithHTTPClient(awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{}
+		}
+		if len(caCert) > 0 {
+			var caCertPool *x509.CertPool
+			caCertPool, err := x509.SystemCertPool()
+			if err != nil {
+				cb.log.Warnf("Failed to load system cert pool, using empty cert pool, err: %v", err)
+				caCertPool = x509.NewCertPool()
+			}
+			caCertPool.AppendCertsFromPEM([]byte(caCert))
+			tr.TLSClientConfig.RootCAs = caCertPool
+		}
+		tr.TLSClientConfig.InsecureSkipVerify = insecureSkipTLSVerify
+	})))
+	return cb
+}
+
+func (cb *configBuilder) Build() (aws.Config, error) {
+	conf, err := config.LoadDefaultConfig(context.Background(), cb.opts...)
 	if err != nil {
-		return empty, errors.Wrapf(err, "could not load config")
+		return aws.Config{}, err
 	}
-	if _, err := awsConfig.Credentials.Retrieve(context.Background()); err != nil {
-		return empty, errors.WithStack(err)
+	if cb.credsFlag {
+		if _, err := conf.Credentials.Retrieve(context.Background()); err != nil {
+			return aws.Config{}, errors.WithStack(err)
+		}
 	}
-
-	return awsConfig, nil
+	return conf, nil
 }
 
 func newS3Client(cfg aws.Config, url string, forcePathStyle bool) (*s3.Client, error) {

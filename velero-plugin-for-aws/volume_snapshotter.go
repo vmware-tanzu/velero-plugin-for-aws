@@ -63,19 +63,18 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	region := config[regionKey]
 	credentialProfile := config[credentialProfileKey]
 	credentialsFile := config[credentialsFileKey]
-	//	enableSharedConfig := config[enableSharedConfigKey]
 
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
-
-	cfg, err := newAWSConfig(region, credentialProfile, credentialsFile, false, "")
+	cfg, err := newConfigBuilder(b.log).
+		WithRegion(region).
+		WithProfile(credentialProfile).
+		WithCredentialsFile(credentialsFile).Build()
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
 	b.ec2 = ec2.NewFromConfig(cfg)
-
 	return nil
 }
 
