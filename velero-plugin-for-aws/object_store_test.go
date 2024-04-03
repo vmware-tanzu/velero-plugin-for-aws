@@ -112,3 +112,43 @@ func TestObjectExists(t *testing.T) {
 		})
 	}
 }
+
+func TestValidChecksumAlg(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "md5 is invalid",
+			input:    "MD5",
+			expected: false,
+		},
+		{
+			name:     "sha256 is invalid",
+			input:    "sha256",
+			expected: false,
+		},
+		{
+			name:     "SHA256 is valid",
+			input:    "SHA256",
+			expected: true,
+		},
+		{
+			name:     "empty is valid",
+			input:    "",
+			expected: true,
+		},
+		{
+			name:     "blank string with space is invalid",
+			input:    "  ",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, validChecksumAlg(tc.input))
+		})
+	}
+}

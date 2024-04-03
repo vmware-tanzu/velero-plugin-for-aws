@@ -50,6 +50,7 @@ const (
 	caCertKey                    = "caCert"
 	enableSharedConfigKey        = "enableSharedConfig"
 	taggingKey                   = "tagging"
+	checksumAlgKey               = "checksumAlgorithm"
 )
 
 type s3Interface interface {
@@ -95,6 +96,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		insecureSkipTLSVerifyKey,
 		enableSharedConfigKey,
 		taggingKey,
+		checksumAlgKey,
 	); err != nil {
 		return err
 	}
@@ -188,9 +190,20 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 	}
-	// TODO: Make it configurable in plugin v1.10
-	o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
+	if alg, ok := config[checksumAlgKey]; ok {
+		if !validChecksumAlg(alg) {
+			return errors.Errorf("invalid checksum algorithm: %s", alg)
+		}
+		o.checksumAlg = alg
+	} else {
+		o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
+	}
 	return nil
+}
+
+func validChecksumAlg(alg string) bool {
+	return alg == string(types.ChecksumAlgorithmCrc32) || alg == string(types.ChecksumAlgorithmCrc32c) ||
+		alg == string(types.ChecksumAlgorithmSha1) || alg == string(types.ChecksumAlgorithmSha256) || alg == ""
 }
 
 func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
