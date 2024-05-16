@@ -19,13 +19,11 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version | Velero Version |
 |----------------|----------------|
+| v1.10.x        | v1.14.x        |
 | v1.9.x         | v1.13.x        |
 | v1.8.x         | v1.12.x        |
 | v1.7.x         | v1.11.x        |
 | v1.6.x         | v1.10.x        |
-| v1.5.x         | v1.9.x         |
-| v1.4.x         | v1.8.x         |
-| v1.3.x         | v1.7.x         |
 
 ## Filing issues
 
@@ -265,7 +263,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.9.0 \
+    --plugins velero/velero-plugin-for-aws:v1.10.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -277,7 +275,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.9.0 \
+    --plugins velero/velero-plugin-for-aws:v1.10.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -286,8 +284,6 @@ velero install \
 ```
 
 Additionally, you can specify `--use-node-agent` to enable node agent support, and `--wait` to wait for the deployment to be ready.
-
-**Note:** If you are using EKS, there is a [known permissions issue](https://github.com/vmware-tanzu/velero/issues/3138) when using Velero with Kubernetes versions 1.18 and earlier that will prevent the Velero from being able to read S3 storage locations. To fix this, update the Velero deployment yaml file to include following `securityContext` value:
 
 ```
 securityContext:
