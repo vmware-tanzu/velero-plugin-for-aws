@@ -1,8 +1,6 @@
 module github.com/vmware-tanzu/velero-plugin-for-aws
 
-go 1.22.0
-
-toolchain go1.22.2
+go 1.22.2
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.24.1
@@ -15,7 +13,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
-	github.com/vmware-tanzu/velero v0.0.0-20240424061649-159a49f0b2b9
+	github.com/vmware-tanzu/velero v0.0.0-20240524054814-9164bc95a403
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
 )

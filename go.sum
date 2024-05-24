@@ -168,8 +168,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/vmware-tanzu/velero v0.0.0-20240424061649-159a49f0b2b9 h1:95yUi+EafcRoT/2tQ2TPy7rcvKsPSfPiRgcnrAjjUww=
-github.com/vmware-tanzu/velero v0.0.0-20240424061649-159a49f0b2b9/go.mod h1:cPVOV3ThNZBs2HgkP9OUxL9SPAxCnyzTj+kXa0TXwV8=
+github.com/vmware-tanzu/velero v0.0.0-20240524054814-9164bc95a403 h1:rpPB7uh994I9Jxgz4qOYZOoOaG7KIq06RHPc0TaSaFs=
+github.com/vmware-tanzu/velero v0.0.0-20240524054814-9164bc95a403/go.mod h1:yeGs7/xq35yOGDPCV0ryxoybQBsTLXmrxwzXBXtiwp8=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
