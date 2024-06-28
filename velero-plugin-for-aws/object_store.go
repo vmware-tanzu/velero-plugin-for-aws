@@ -30,6 +30,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/smithy-go/logging"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -136,11 +138,19 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
 		}
 	}
-
+	// aws logging func
+	awsLogger := logging.LoggerFunc(func(classification logging.Classification, format string, v ...interface{}) {
+		log := o.log.WithFields(logrus.Fields{
+			"sdk":            "aws-sdk-go-v2",
+			"classification": classification,
+		})
+		log.Debugf(format, v...)
+	})
 	// AWS (not an alternate S3-compatible API) and region not
 	// explicitly specified: determine the bucket's region
 	if s3URL == "" && region == "" {
-		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).
+			WithLogger(awsLogger).WithClientLogMode().Build()
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -161,11 +171,12 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	cfg, err := newConfigBuilder(o.log).WithRegion(region).
 		WithProfile(credentialProfile).
 		WithCredentialsFile(credentialsFile).
-		WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		WithTLSSettings(insecureSkipTLSVerify, caCert).
+		WithLogger(awsLogger).WithClientLogMode().
+		Build()
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
 	client, err := newS3Client(cfg, s3URL, s3ForcePathStyle)
 	if err != nil {
 		return errors.WithStack(err)
