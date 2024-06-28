@@ -8,6 +8,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/logging"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -75,6 +76,16 @@ func (cb *configBuilder) WithTLSSettings(insecureSkipTLSVerify bool, caCert stri
 	return cb
 }
 
+func (cb *configBuilder) WithLogger(log logrus.FieldLogger) *configBuilder {
+	cb.opts = append(cb.opts, config.WithLogger(awsLogger(log)))
+	return cb
+}
+
+func (cb *configBuilder) WithClientLogMode() *configBuilder {
+	cb.opts = append(cb.opts, config.WithClientLogMode(aws.LogRequest|aws.LogResponse|aws.LogRetries|aws.LogSigning))
+	return cb
+}
+
 func (cb *configBuilder) Build() (aws.Config, error) {
 	conf, err := config.LoadDefaultConfig(context.Background(), cb.opts...)
 	if err != nil {
@@ -104,4 +115,14 @@ func newS3Client(cfg aws.Config, url string, forcePathStyle bool) (*s3.Client, e
 	}
 
 	return s3.NewFromConfig(cfg, opts...), nil
+}
+
+func awsLogger(log logrus.FieldLogger) logging.Logger {
+	return logging.LoggerFunc(func(classification logging.Classification, format string, v ...interface{}) {
+		log := log.WithFields(logrus.Fields{
+			"sdk":            "aws-sdk-go-v2",
+			"classification": classification,
+		})
+		log.Debugf(format, v...)
+	})
 }
