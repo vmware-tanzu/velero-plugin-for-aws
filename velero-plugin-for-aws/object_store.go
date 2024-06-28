@@ -136,11 +136,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
 		}
 	}
-
 	// AWS (not an alternate S3-compatible API) and region not
 	// explicitly specified: determine the bucket's region
 	if s3URL == "" && region == "" {
-		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).
+			WithLogger(o.log).WithClientLogMode().Build()
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -161,11 +161,12 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	cfg, err := newConfigBuilder(o.log).WithRegion(region).
 		WithProfile(credentialProfile).
 		WithCredentialsFile(credentialsFile).
-		WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		WithTLSSettings(insecureSkipTLSVerify, caCert).
+		WithLogger(o.log).WithClientLogMode().
+		Build()
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
 	client, err := newS3Client(cfg, s3URL, s3ForcePathStyle)
 	if err != nil {
 		return errors.WithStack(err)
