@@ -8,6 +8,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/logging"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -72,6 +73,16 @@ func (cb *configBuilder) WithTLSSettings(insecureSkipTLSVerify bool, caCert stri
 		}
 		tr.TLSClientConfig.InsecureSkipVerify = insecureSkipTLSVerify
 	})))
+	return cb
+}
+
+func (cb *configBuilder) WithLogger(logger logging.Logger) *configBuilder {
+	cb.opts = append(cb.opts, config.WithLogger(logger))
+	return cb
+}
+
+func (cb *configBuilder) WithClientLogMode() *configBuilder {
+	cb.opts = append(cb.opts, config.WithClientLogMode(aws.LogRequest|aws.LogResponse|aws.LogRetries|aws.LogSigning))
 	return cb
 }
 
