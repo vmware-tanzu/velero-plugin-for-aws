@@ -19,16 +19,18 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"slices"
+	"sort"
+	"strconv"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"io"
-	"os"
-	"sort"
-	"strconv"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -216,8 +218,8 @@ func (o *ObjectStore) Init(config map[string]string) error {
 }
 
 func validChecksumAlg(alg string) bool {
-	return alg == string(types.ChecksumAlgorithmCrc32) || alg == string(types.ChecksumAlgorithmCrc32c) ||
-		alg == string(types.ChecksumAlgorithmSha1) || alg == string(types.ChecksumAlgorithmSha256) || alg == ""
+	typedAlg := types.ChecksumAlgorithm(alg)
+	return alg == "" || slices.Contains(typedAlg.Values(), typedAlg)
 }
 
 func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
