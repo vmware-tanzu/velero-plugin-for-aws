@@ -139,12 +139,20 @@ func (o *ObjectStore) Init(config map[string]string) error {
 
 	// AWS (not an alternate S3-compatible API) and region not
 	// explicitly specified: determine the bucket's region
+	// GetBucketRegion will attempt to get the region for a bucket using the
+	// client's configured region to determine which AWS partition to perform the query on.
+	// The request will not be signed, and will not use your AWS credentials.
 	if s3URL == "" && region == "" {
-		cfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
+		regionCfg, err := newConfigBuilder(o.log).WithTLSSettings(insecureSkipTLSVerify, caCert).
+		// configures anonymous credentials
+		WithAnonymousCredentials().
+		// configures region for GetBucketRegion to query from
+		WithRegion("us-east-1").
+		Build()
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		client, err := newS3Client(cfg, s3URL, s3ForcePathStyle)
+		client, err := newS3Client(regionCfg, s3URL, s3ForcePathStyle)
 		if err != nil {
 			return errors.WithStack(err)
 		}
