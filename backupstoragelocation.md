@@ -13,18 +13,18 @@ spec:
   #
   # Required.
   provider: velero.io/aws
-  
+
   objectStorage:
     # The bucket in which to store backups.
     #
     # Required.
     bucket: my-bucket
-    
+
     # The prefix within the bucket under which to store backups.
     #
     # Optional.
     prefix: my-prefix
-  
+
   # The credentials intended to be used with this location.
   # optional (if not set, default credentials secret is used)
   credential:
@@ -45,13 +45,13 @@ spec:
     # Optional (defaults to "false").
     s3ForcePathStyle: "true"
 
-    # You can specify the AWS S3 URL here for explicitness, but Velero can already generate it from 
+    # You can specify the AWS S3 URL here for explicitness, but Velero can already generate it from
     # "region" and "bucket". This field is primarily for local storage services like MinIO.
     #
     # Optional.
     s3Url: "http://minio:9000"
-    
-    # If specified, use this instead of "s3Url" when generating download URLs (e.g., for logs). This 
+
+    # If specified, use this instead of "s3Url" when generating download URLs (e.g., for logs). This
     # field is primarily for local storage services like MinIO.
     #
     # Optional.
@@ -65,41 +65,43 @@ spec:
     serverSideEncryption: AES256
 
     # Specify an AWS KMS key ID (formatted per the example) or alias (formatted as "alias/<KMS-key-alias-name>"), or its full ARN
-    # to enable encryption of the backups stored in S3. Only works with AWS S3 and may require explicitly 
-    # granting key usage rights. 
+    # to enable encryption of the backups stored in S3. Only works with AWS S3 and may require explicitly
+    # granting key usage rights.
     #
     # Cannot be used in conjunction with customerKeyEncryptionFile.
     #
     # Optional.
     kmsKeyId: "502b409c-4da1-419f-a16e-eif453b3i49f"
-    
+
     # Specify the file that contains the SSE-C customer key to enable customer key encryption of the backups
     # stored in S3. The referenced file should contain a 32-byte string.
-    #  
+    #
     # The customerKeyEncryptionFile points to a mounted secret within the velero container.
-    # Add the below values to the velero cloud-credentials secret:
-    # customer-key: <your_b64_encoded_32byte_string>
+    # Generate a 32-byte key encoded in base64:
+    # openssl rand -base64 32 | tr -d '\n'
+    # Add the generated value to the velero cloud-credentials secret:
+    # customer-key: <generated-key>
     # The default value below points to the already mounted secret.
-    # 
+    #
     # Cannot be used in conjunction with kmsKeyId.
     #
     # Optional (defaults to "", which means SSE-C is disabled).
     customerKeyEncryptionFile: "/credentials/customer-key"
 
-    # Version of the signature algorithm used to create signed URLs that are used by velero CLI to 
-    # download backups or fetch logs. Possible versions are "1" and "4". Usually the default version 
+    # Version of the signature algorithm used to create signed URLs that are used by velero CLI to
+    # download backups or fetch logs. Possible versions are "1" and "4". Usually the default version
     # 4 is correct, but some S3-compatible providers like Quobyte only support version 1.
     #
     # Optional (defaults to "4").
     signatureVersion: "1"
 
     # AWS profile within the credentials file to use for the backup storage location.
-    # 
+    #
     # Optional (defaults to "default").
     profile: "default"
 
-    # Set this to "true" if you do not want to verify the TLS certificate when connecting to the 
-    # object store -- like for self-signed certs with MinIO. This is susceptible to man-in-the-middle 
+    # Set this to "true" if you do not want to verify the TLS certificate when connecting to the
+    # object store -- like for self-signed certs with MinIO. This is susceptible to man-in-the-middle
     # attacks and is not recommended for production.
     #
     # Optional (defaults to "false").
@@ -111,7 +113,7 @@ spec:
     # Optional (defaults to "false").
     enableSharedConfig: "true"
 
-    # Tags that need to be placed on AWS S3 objects. 
+    # Tags that need to be placed on AWS S3 objects.
     # For example "Key1=Value1&Key2=Value2"
     #
     # Optional (defaults to empty "")
@@ -119,7 +121,7 @@ spec:
 
     # The checksum algorithm to use for uploading objects to S3.
     # The Supported values are  "CRC32",  "CRC32C", "SHA1", "SHA256".
-    # If the value is set as empty string "", no checksum will be calculated and attached to 
+    # If the value is set as empty string "", no checksum will be calculated and attached to
     # the request headers.
     #
     # Optional (defaults to "CRC32")
