@@ -406,7 +406,7 @@ func (o *ObjectStore) DeleteObject(bucket, key string) error {
 	return errors.Wrapf(err, "error deleting object %s", key)
 }
 
-func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, http.Header, error) {
+func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, map[string][]string, error) {
 
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
