@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -405,7 +406,7 @@ func (o *ObjectStore) DeleteObject(bucket, key string) error {
 	return errors.Wrapf(err, "error deleting object %s", key)
 }
 
-func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
+func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, http.Header, error) {
 
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -423,7 +424,7 @@ func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (st
 	})
 
 	if err != nil {
-		return "", errors.WithStack(err)
+		return "", http.Header{}, errors.WithStack(err)
 	}
-	return req.URL, nil
+	return req.URL, req.SignedHeader, nil
 }
