@@ -31,11 +31,6 @@ func (cb *configBuilder) WithRegion(region string) *configBuilder {
 	return cb
 }
 
-func (cb *configBuilder) WithAnonymousCredentials() *configBuilder {
-	cb.opts = append(cb.opts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
-	return cb
-}
-
 func (cb *configBuilder) WithProfile(profile string) *configBuilder {
 	cb.opts = append(cb.opts, config.WithSharedConfigProfile(profile))
 	return cb
