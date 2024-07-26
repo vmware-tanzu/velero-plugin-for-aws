@@ -242,7 +242,7 @@ func (b *VolumeSnapshotter) DeleteSnapshot(snapshotID string) error {
 	// see https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
-		if "InvalidSnapshot.NotFound" == apiErr.ErrorCode() {
+		if apiErr.ErrorCode() == "InvalidSnapshot.NotFound" {
 			return nil
 		}
 	}
