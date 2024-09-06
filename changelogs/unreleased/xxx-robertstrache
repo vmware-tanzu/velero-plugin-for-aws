@@ -1,0 +1,1 @@
+Fix sending the MD5 of the customer provided encryption key https://github.com/vmware-tanzu/velero/issues/7693
