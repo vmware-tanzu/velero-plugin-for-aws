@@ -18,6 +18,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -74,6 +76,7 @@ type ObjectStore struct {
 	s3Uploader           *manager.Uploader
 	kmsKeyID             string
 	sseCustomerKey       string
+	sseCustomerKeyMd5    string
 	signatureVersion     string
 	serverSideEncryption string
 	tagging              string
@@ -213,6 +216,18 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	} else {
 		o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
 	}
+
+	if customerKeyEncryptionFile != "" {
+		customerKey, err := readCustomerKey(customerKeyEncryptionFile)
+		if err != nil {
+			return err
+		}
+		sseCustomerKey := base64.StdEncoding.EncodeToString([]byte(customerKey))
+		o.sseCustomerKey = sseCustomerKey
+		hash := md5.Sum([]byte(customerKey))
+		sseCustomerKeyMd5 := base64.StdEncoding.EncodeToString(hash[:])
+		o.sseCustomerKeyMd5 = sseCustomerKeyMd5
+	}
 	return nil
 }
 
@@ -267,6 +282,7 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	case o.sseCustomerKey != "":
 		input.SSECustomerAlgorithm = aws.String("AES256")
 		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
 	// otherwise, use the SSE algorithm specified, if any
 	case o.serverSideEncryption != "":
 		input.ServerSideEncryption = types.ServerSideEncryption(o.serverSideEncryption)
