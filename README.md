@@ -101,6 +101,7 @@ For more information, see [the AWS documentation on IAM users][10].
                     "s3:GetObject",
                     "s3:DeleteObject",
                     "s3:PutObject",
+                    "s3:PutObjectTagging",
                     "s3:AbortMultipartUpload",
                     "s3:ListMultipartUploadParts"
                 ],
@@ -225,6 +226,7 @@ It can be set up for Velero by creating a role that will have required permissio
                     "s3:GetObject",
                     "s3:DeleteObject",
                     "s3:PutObject",
+                    "s3:PutObjectTagging",
                     "s3:AbortMultipartUpload",
                     "s3:ListMultipartUploadParts"
                 ],
