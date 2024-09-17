@@ -112,7 +112,8 @@ spec:
     enableSharedConfig: "true"
 
     # Tags that need to be placed on AWS S3 objects. 
-    # For example "Key1=Value1&Key2=Value2"
+    # For example, "Key1=Value1&Key2=Value2".
+    # This requires the IAM policy to have the "s3:PutObjectTagging" permission on the S3 bucket.
     #
     # Optional (defaults to empty "")
     tagging: ""
