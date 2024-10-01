@@ -1,0 +1,1 @@
+Add required S3 PutObjectTagging permission to IAM policy in README

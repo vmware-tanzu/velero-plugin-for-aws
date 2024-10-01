@@ -76,7 +76,8 @@ For more information, see [the AWS documentation on IAM users][10].
 
     If you'll be using Velero to backup multiple clusters with multiple S3 buckets, it may be desirable to create a unique username per cluster rather than the default `velero`.
 
-2. Attach policies to give `velero` the necessary permissions:
+2. Attach policies to give `velero` the necessary permissions (note that `s3:PutObjectTagging` is only needed 
+   if you make use of the `config.tagging` field in the `BackupStorageLocation` spec):
 
     ```
     cat > velero-policy.json <<EOF
@@ -101,6 +102,7 @@ For more information, see [the AWS documentation on IAM users][10].
                     "s3:GetObject",
                     "s3:DeleteObject",
                     "s3:PutObject",
+                    "s3:PutObjectTagging",
                     "s3:AbortMultipartUpload",
                     "s3:ListMultipartUploadParts"
                 ],
@@ -199,7 +201,8 @@ It can be set up for Velero by creating a role that will have required permissio
     aws iam create-role --role-name velero --assume-role-policy-document file://./velero-trust-policy.json
     ```
 
-3. Attach policies to give `velero` the necessary permissions:
+3. Attach policies to give `velero` the necessary permissions (note that `s3:PutObjectTagging` is only needed 
+   if you make use of the `config.tagging` field in the `BackupStorageLocation` spec):
 
     ```
     BUCKET=<YOUR_BUCKET>
@@ -225,6 +228,7 @@ It can be set up for Velero by creating a role that will have required permissio
                     "s3:GetObject",
                     "s3:DeleteObject",
                     "s3:PutObject",
+                    "s3:PutObjectTagging",
                     "s3:AbortMultipartUpload",
                     "s3:ListMultipartUploadParts"
                 ],
