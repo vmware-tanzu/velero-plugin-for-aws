@@ -142,6 +142,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	cfg, err := newConfigBuilder(o.log).WithRegion(region).
 		WithProfile(credentialProfile).
 		WithCredentialsFile(credentialsFile).
+		WithClientLogMode().
 		WithTLSSettings(insecureSkipTLSVerify, caCert).Build()
 	if err != nil {
 		return errors.WithStack(err)
