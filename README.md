@@ -25,6 +25,15 @@ Below is a listing of plugin versions and respective Velero versions that are co
 | v1.7.x         | v1.11.x        |
 | v1.6.x         | v1.10.x        |
 
+## Non-AWS S3 compatible provider known issues with plugin v1.10.x (aws-sdk-go-v2):
+| Cloud Provider      |Notes|Velero Issue|Cloud Provider Issue|
+|-|-|-|-|
+|Google Cloud Storage|[Should use GCP plugin instead](https://github.com/vmware-tanzu/velero-plugin-for-gcp)||https://issuetracker.google.com/issues/256641357|
+|Net App||https://github.com/vmware-tanzu/velero/issues/7828||
+|Oracle||https://github.com/vmware-tanzu/velero/issues/8013||
+|IBM COS|checksumAlgorithm="" should work if [replication is not enabled](https://github.com/vmware-tanzu/velero/issues/7543#issuecomment-2225803682)|https://github.com/vmware-tanzu/velero/issues/7543||
+|Hitachi Content Platform (HCP)||||
+
 ## Filing issues
 
 If you would like to file a GitHub issue for the plugin, please open the issue on the [core Velero repo][103]
