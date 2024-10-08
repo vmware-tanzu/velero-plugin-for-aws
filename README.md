@@ -29,7 +29,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 | Cloud Provider      |Notes|Velero Issue|Cloud Provider Issue|
 |-|-|-|-|
 |Google Cloud Storage|[Should use GCP plugin instead](https://github.com/vmware-tanzu/velero-plugin-for-gcp)||https://issuetracker.google.com/issues/256641357|
-|Net App||https://github.com/vmware-tanzu/velero/issues/7828||
+|Net App|`operation error S3: PutObject, https response error StatusCode: 501, RequestID: , HostID: , api error NotImplemented: The s3 command you requested is not implemented.`|https://github.com/vmware-tanzu/velero/issues/7828 https://github.com/vmware-tanzu/velero/issues/8152||
 |Oracle||https://github.com/vmware-tanzu/velero/issues/8013||
 |IBM COS|checksumAlgorithm="" should work if [replication is not enabled](https://github.com/vmware-tanzu/velero/issues/7543#issuecomment-2225803682)|https://github.com/vmware-tanzu/velero/issues/7543||
 |Hitachi Content Platform (HCP)||||
