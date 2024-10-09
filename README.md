@@ -33,7 +33,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 |Oracle||https://github.com/vmware-tanzu/velero/issues/8013||
 |IBM COS|checksumAlgorithm="" should work if [replication is not enabled](https://github.com/vmware-tanzu/velero/issues/7543#issuecomment-2225803682)|https://github.com/vmware-tanzu/velero/issues/7543||
 |Hitachi Content Platform (HCP)||||
-|OpenStack||https://github.com/vmware-tanzu/velero/issues/8264||
+|Cloudian||https://github.com/vmware-tanzu/velero/issues/8264||
 ## Filing issues
 
 If you would like to file a GitHub issue for the plugin, please open the issue on the [core Velero repo][103]
