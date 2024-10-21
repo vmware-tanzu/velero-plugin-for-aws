@@ -19,11 +19,10 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version | Velero Version |
 |----------------|----------------|
+| v1.11.x        | v1.15.x        |
 | v1.10.x        | v1.14.x        |
 | v1.9.x         | v1.13.x        |
 | v1.8.x         | v1.12.x        |
-| v1.7.x         | v1.11.x        |
-| v1.6.x         | v1.10.x        |
 
 ## Non-AWS S3 compatible provider known issues with plugin v1.10.x (aws-sdk-go-v2):
 | Cloud Provider      |Notes|Velero Issue|Cloud Provider Issue|
