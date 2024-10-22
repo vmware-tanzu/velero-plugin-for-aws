@@ -132,7 +132,7 @@ func TestSetVolumeID(t *testing.T) {
 	}
 
 	// missing spec.awsElasticBlockStore -> error
-	updatedPV, err := b.SetVolumeID(pv, "vol-updated")
+	_, err := b.SetVolumeID(pv, "vol-updated")
 	require.Error(t, err)
 
 	// happy path
@@ -149,7 +149,7 @@ func TestSetVolumeID(t *testing.T) {
 		"labels": labels,
 	}
 
-	updatedPV, err = b.SetVolumeID(pv, "vol-updated")
+	updatedPV, err := b.SetVolumeID(pv, "vol-updated")
 
 	require.NoError(t, err)
 
@@ -167,7 +167,7 @@ func TestSetVolumeIDNoZone(t *testing.T) {
 	}
 
 	// missing spec.awsElasticBlockStore -> error
-	updatedPV, err := b.SetVolumeID(pv, "vol-updated")
+	_, err := b.SetVolumeID(pv, "vol-updated")
 	require.Error(t, err)
 
 	// happy path
@@ -176,7 +176,7 @@ func TestSetVolumeIDNoZone(t *testing.T) {
 		"awsElasticBlockStore": aws,
 	}
 
-	updatedPV, err = b.SetVolumeID(pv, "vol-updated")
+	updatedPV, err := b.SetVolumeID(pv, "vol-updated")
 
 	require.NoError(t, err)
 
