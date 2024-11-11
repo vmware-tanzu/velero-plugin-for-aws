@@ -18,6 +18,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -74,6 +76,7 @@ type ObjectStore struct {
 	s3Uploader           *manager.Uploader
 	kmsKeyID             string
 	sseCustomerKey       string
+	sseCustomerKeyMd5    string
 	signatureVersion     string
 	serverSideEncryption string
 	tagging              string
@@ -82,6 +85,21 @@ type ObjectStore struct {
 
 func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
 	return &ObjectStore{log: logger}
+}
+
+// calcMd5HashOfCustomerKey - get md5 hash of sseCustomerKey for
+// header X-Amz-Server-Side-Encryption-Customer-Key-Md5
+func (o ObjectStore) calcMd5HashOfCustomerKey() (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(o.sseCustomerKey)
+
+	if err != nil {
+		return "", errors.New("err decoding sseCustomerKey")
+	}
+
+	hasher := md5.New()
+	hasher.Write(raw)
+
+	return base64.StdEncoding.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func (o *ObjectStore) Init(config map[string]string) error {
@@ -187,6 +205,12 @@ func (o *ObjectStore) Init(config map[string]string) error {
 			return err
 		}
 		o.sseCustomerKey = customerKey
+
+		customerKeyMd5, err := o.calcMd5HashOfCustomerKey()
+		if err != nil {
+			return err
+		}
+		o.sseCustomerKeyMd5 = customerKeyMd5
 	}
 
 	if publicURL != "" {
@@ -267,6 +291,7 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	case o.sseCustomerKey != "":
 		input.SSECustomerAlgorithm = aws.String("AES256")
 		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
 	// otherwise, use the SSE algorithm specified, if any
 	case o.serverSideEncryption != "":
 		input.ServerSideEncryption = types.ServerSideEncryption(o.serverSideEncryption)
@@ -298,6 +323,7 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 	if o.sseCustomerKey != "" {
 		input.SSECustomerAlgorithm = aws.String("AES256")
 		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
 	}
 
 	log.Debug("Checking if object exists")
@@ -329,6 +355,7 @@ func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 	if o.sseCustomerKey != "" {
 		input.SSECustomerAlgorithm = aws.String("AES256")
 		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
 	}
 
 	output, err := o.s3.GetObject(context.Background(), input)
