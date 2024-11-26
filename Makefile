@@ -29,6 +29,7 @@ GCR_IMAGE ?= $(GCR_REGISTRY)/$(BIN)
 # We allow the Dockerfile to be configurable to enable the use of custom Dockerfiles
 # that pull base images from different registries.
 VELERO_DOCKERFILE ?= Dockerfile
+VELERO_DOCKERFILE_WINDOWS ?= Dockerfile-Windows
 
 # Which architecture to build - see $(ALL_ARCH) for options.
 # if the 'local' rule is being run, detect the ARCH from 'go env'
@@ -59,9 +60,35 @@ buildx not enabled, refusing to run this recipe
 see: https://velero.io/docs/main/build-from-source/#making-images-and-updating-velero for more info
 endef
 
+comma=,
+
 CLI_PLATFORMS ?= linux-amd64 linux-arm linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 linux-ppc64le
-BUILDX_PLATFORMS ?= $(subst -,/,$(ARCH))
-BUILDX_OUTPUT_TYPE ?= docker
+BUILDX_PUSH ?= false
+BUILDX_BUILD_OS ?= linux
+BUILDX_BUILD_ARCH ?= amd64
+BUILDX_TAG_GCR ?= false
+BUILDX_WINDOWS_VERSION ?= ltsc2022
+
+ifneq ($(BUILDX_PUSH), true)
+	ALL_OS = linux
+	ALL_ARCH.linux = $(word 2, $(subst -, ,$(shell go env GOOS)-$(shell go env GOARCH)))
+	BUILDX_OUTPUT_TYPE = docker
+else
+	ALL_OS = $(subst $(comma), ,$(BUILDX_BUILD_OS))
+	ALL_ARCH.linux = $(subst $(comma), ,$(BUILDX_BUILD_ARCH))
+	BUILDX_OUTPUT_TYPE = registry
+endif
+
+ALL_ARCH.windows = $(if $(filter windows,$(ALL_OS)),amd64,)
+ALL_OSVERSIONS.windows = $(if $(filter windows,$(ALL_OS)),$(BUILDX_WINDOWS_VERSION),)
+ALL_OS_ARCH.linux =  $(foreach os, $(filter linux,$(ALL_OS)), $(foreach arch, ${ALL_ARCH.linux}, ${os}-$(arch)))
+ALL_OS_ARCH.windows = $(foreach os, $(filter windows,$(ALL_OS)), $(foreach arch, $(ALL_ARCH.windows), $(foreach osversion, ${ALL_OSVERSIONS.windows}, ${os}-${osversion}-${arch})))
+ALL_OS_ARCH = $(ALL_OS_ARCH.linux)$(ALL_OS_ARCH.windows)
+
+ALL_IMAGE_TAGS = $(IMAGE_TAGS)
+ifeq ($(BUILDX_TAG_GCR), true)
+	ALL_IMAGE_TAGS += $(GCR_IMAGE_TAGS)
+endif
 
 # set git sha and tree state
 GIT_SHA = $(shell git rev-parse HEAD)
@@ -103,11 +130,29 @@ container:
 ifneq ($(BUILDX_ENABLED), true)
 	$(error $(BUILDX_ERROR))
 endif
+	-docker buildx rm aws-plugin-builder || true
+	@docker buildx create --use --name=aws-plugin-builder
+
+	@for osarch in $(ALL_OS_ARCH); do \
+		$(MAKE) container-$${osarch}; \
+	done
+
+ifeq ($(BUILDX_PUSH), true)
+	@for tag in $(ALL_IMAGE_TAGS); do \
+		IMAGE_TAG=$${tag} $(MAKE) push-manifest; \
+	done
+endif
+
+container-linux-%:
+	@BUILDX_ARCH=$* $(MAKE) container-linux
+
+container-linux:
+	@echo "building container: $(IMAGE):$(VERSION)-linux-$(BUILDX_ARCH)"
+
 	@docker buildx build --pull \
 	--output=type=$(BUILDX_OUTPUT_TYPE) \
-	--platform $(BUILDX_PLATFORMS) \
-	$(addprefix -t , $(IMAGE_TAGS)) \
-	$(addprefix -t , $(GCR_IMAGE_TAGS)) \
+	--platform="linux/$(BUILDX_ARCH)" \
+	$(addprefix -t , $(addsuffix "-linux-$(BUILDX_ARCH)",$(ALL_IMAGE_TAGS))) \
 	--build-arg=GOPROXY=$(GOPROXY) \
 	--build-arg=PKG=$(PKG) \
 	--build-arg=BIN=$(BIN) \
@@ -115,14 +160,54 @@ endif
 	--build-arg=GIT_SHA=$(GIT_SHA) \
 	--build-arg=GIT_TREE_STATE=$(GIT_TREE_STATE) \
 	--build-arg=REGISTRY=$(REGISTRY) \
+	--provenance=false \
+	--sbom=false \
 	-f $(VELERO_DOCKERFILE) .
-	@echo "container: $(IMAGE):$(VERSION)"
-ifeq ($(BUILDX_OUTPUT_TYPE)_$(REGISTRY), registry_velero)
-	docker pull $(IMAGE):$(VERSION)
-	rm -f $(BIN)-$(VERSION).tar
-	docker save $(IMAGE):$(VERSION) -o $(BIN)-$(VERSION).tar
-	gzip -f $(BIN)-$(VERSION).tar
-endif
+	
+	@echo "built container: $(IMAGE):$(VERSION)-linux-$(BUILDX_ARCH)"
+
+container-windows-%:
+	@BUILDX_OSVERSION=$(firstword $(subst -, ,$*)) BUILDX_ARCH=$(lastword $(subst -, ,$*)) $(MAKE) container-windows
+
+container-windows:
+	@echo "building container: $(IMAGE):$(VERSION)-windows-$(BUILDX_OSVERSION)-$(BUILDX_ARCH)"
+
+	@docker buildx build --pull \
+	--output=type=$(BUILDX_OUTPUT_TYPE) \
+	--platform="windows/$(BUILDX_ARCH)" \
+	$(addprefix -t , $(addsuffix "-windows-$(BUILDX_OSVERSION)-$(BUILDX_ARCH)",$(ALL_IMAGE_TAGS))) \
+	--build-arg=GOPROXY=$(GOPROXY) \
+	--build-arg=PKG=$(PKG) \
+	--build-arg=BIN=$(BIN) \
+	--build-arg=VERSION=$(VERSION) \
+	--build-arg=OS_VERSION=$(BUILDX_OSVERSION) \
+	--build-arg=GIT_SHA=$(GIT_SHA) \
+	--build-arg=GIT_TREE_STATE=$(GIT_TREE_STATE) \
+	--build-arg=REGISTRY=$(REGISTRY) \
+	--provenance=false \
+	--sbom=false \
+	-f $(VELERO_DOCKERFILE_WINDOWS) .	
+
+	@echo "built container: $(IMAGE):$(VERSION)-windows-$(BUILDX_OSVERSION)-$(BUILDX_ARCH)"
+
+push-manifest:
+	@echo "building manifest: $(IMAGE_TAG) for $(foreach osarch, $(ALL_OS_ARCH), $(IMAGE_TAG)-${osarch})"
+	@docker manifest create --amend $(IMAGE_TAG) $(foreach osarch, $(ALL_OS_ARCH), $(IMAGE_TAG)-${osarch})
+
+	@set -x; \
+	for arch in $(ALL_ARCH.windows); do \
+		for osversion in $(ALL_OSVERSIONS.windows); do \
+			BASEIMAGE=mcr.microsoft.com/windows/nanoserver:$${osversion}; \
+			full_version=`docker manifest inspect $${BASEIMAGE} | jq -r '.manifests[0].platform["os.version"]'`; \
+			docker manifest annotate --os windows --arch $${arch} --os-version $${full_version} $(IMAGE_TAG) $(IMAGE_TAG)-windows-$${osversion}-$${arch}; \
+		done; \
+	done
+
+	@echo "pushing mainifest $(IMAGE_TAG)"
+	@docker manifest push --purge $(IMAGE_TAG)
+
+	@echo "pushed mainifest $(IMAGE_TAG):"
+	@docker manifest inspect $(IMAGE_TAG)
 
 build-dirs:
 	@mkdir -p _output/bin/$(GOOS)/$(GOARCH)
