@@ -28,11 +28,12 @@ Below is a listing of plugin versions and respective Velero versions that are co
 | Cloud Provider      |Notes|Velero Issue|Cloud Provider Issue|
 |-|-|-|-|
 |Google Cloud Storage|[Should use GCP plugin instead](https://github.com/vmware-tanzu/velero-plugin-for-gcp)||https://issuetracker.google.com/issues/256641357|
-|Net App|`operation error S3: PutObject, https response error StatusCode: 501, RequestID: , HostID: , api error NotImplemented: The s3 command you requested is not implemented.`|https://github.com/vmware-tanzu/velero/issues/7828 https://github.com/vmware-tanzu/velero/issues/8152||
+|Net App|`operation error S3: PutObject, https response error StatusCode: 501, RequestID: , HostID: , api error NotImplemented: The s3 command you requested is not implemented.`|https://github.com/vmware-tanzu/velero/issues/7828 https://github.com/vmware-tanzu/velero/issues/8152|[Fixed in ONTAP Release 9.15.1P2.](https://github.com/vmware-tanzu/velero/issues/8152#issuecomment-2464471703:~:text=issue%20is%20fixed%20using%20latest%20version%20NetApp%20Release%209.15.1P2.) <br> [Fixed in Net App StorageGRID® Version 11.8.0.7](https://github.com/vmware-tanzu/velero/issues/7828#issuecomment-2507228050)|
 |Oracle||https://github.com/vmware-tanzu/velero/issues/8013||
-|IBM COS|checksumAlgorithm="" should work if [replication is not enabled](https://github.com/vmware-tanzu/velero/issues/7543#issuecomment-2225803682)|https://github.com/vmware-tanzu/velero/issues/7543||
+|IBM COS|checksumAlgorithm="" should work if [retention is not enabled](https://github.com/vmware-tanzu/velero/issues/7543#issuecomment-2225803682)|https://github.com/vmware-tanzu/velero/issues/7543||
 |Hitachi Content Platform (HCP)||||
 |Cloudian||https://github.com/vmware-tanzu/velero/issues/8264||
+|Qumulo|not compatible with `x-id`, etc.|https://github.com/vmware-tanzu/velero/issues/8312||||
 ## Filing issues
 
 If you would like to file a GitHub issue for the plugin, please open the issue on the [core Velero repo][103]
