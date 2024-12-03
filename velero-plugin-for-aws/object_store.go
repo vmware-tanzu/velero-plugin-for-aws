@@ -242,7 +242,7 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 	fileHandle.Close()
 
 	if nBytes != 32 {
-		return "", errors.Wrapf(err, "contents of %s (%s) are not exactly 32 bytes", customerKeyEncryptionFileKey, customerKeyEncryptionFile)
+		return "", fmt.Errorf("contents of %s (%s) are not exactly 32 bytes", customerKeyEncryptionFileKey, customerKeyEncryptionFile)
 	}
 
 	key := string(keyBytes)
