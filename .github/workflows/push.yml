@@ -26,8 +26,8 @@ jobs:
 
     # Fix issue of setup-gcloud
     - run: |
-        sudo apt-get install python2.7
-        export CLOUDSDK_PYTHON="/usr/bin/python2"
+        sudo apt-get install python3
+        export CLOUDSDK_PYTHON="/usr/bin/python3"
 
     - uses: google-github-actions/setup-gcloud@v0
       with:
