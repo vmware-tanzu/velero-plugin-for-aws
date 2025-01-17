@@ -76,8 +76,12 @@ else
     fi
 fi
 
-if [[ -z "$BUILDX_PLATFORMS" ]]; then
-    BUILDX_PLATFORMS="linux/amd64,linux/arm64,linux/arm/v7"
+if [[ -z "$BUILD_OS" ]]; then
+    BUILD_OS="linux,windows"
+fi
+
+if [[ -z "$BUILD_ARCH" ]]; then
+    BUILD_ARCH="amd64,arm64"
 fi
 
 # Debugging info
@@ -86,7 +90,8 @@ echo "BRANCH: $BRANCH"
 echo "TAG: $TAG"
 echo "TAG_LATEST: $TAG_LATEST"
 echo "VERSION: $VERSION"
-echo "BUILDX_PLATFORMS: $BUILDX_PLATFORMS"
+echo "BUILD_OS: $BUILD_OS"
+echo "BUILD_ARCH: $BUILD_ARCH"
 
 echo "Building and pushing container images."
 
@@ -95,6 +100,7 @@ echo "Building and pushing container images."
 
 VERSION="$VERSION" \
 TAG_LATEST="$TAG_LATEST" \
-BUILDX_PLATFORMS="$BUILDX_PLATFORMS" \
-BUILDX_OUTPUT_TYPE="registry" \
+BUILD_OS="$BUILD_OS" \
+BUILD_ARCH="$BUILD_ARCH" \
+BUILD_OUTPUT_TYPE="registry" \
 make container
