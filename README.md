@@ -35,6 +35,7 @@ Below is a listing of plugin versions and respective Velero versions that are co
 |Cloudian||https://github.com/vmware-tanzu/velero/issues/8264||
 |Qumulo|not compatible with `x-id`, etc.|https://github.com/vmware-tanzu/velero/issues/8312||||
 |Ceph S3|checksumAlgorithm="" to avoid `api error XAmzContentSHA256Mismatch`||||
+|Backblaze B2|checksumAlgorithm="" to avoid `api error XAmzContentSHA256Mismatch`||||
 ## Filing issues
 
 If you would like to file a GitHub issue for the plugin, please open the issue on the [core Velero repo][103]
