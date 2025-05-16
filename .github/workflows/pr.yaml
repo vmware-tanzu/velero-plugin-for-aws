@@ -6,14 +6,13 @@ jobs:
     name: Run CI
     runs-on: ubuntu-latest
     steps:
-    - name: Setup Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: '1.22'
-      id: go
-
     - name: Check out the code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
 
     - name: Make CI
       run: make ci
