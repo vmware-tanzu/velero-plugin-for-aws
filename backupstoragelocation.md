@@ -82,10 +82,26 @@ spec:
     # customer-key: <your_b64_encoded_32byte_string>
     # The value below points to the already mounted secret. 
     # 
-    # Cannot be used in conjunction with kmsKeyId.
+    # Cannot be used in conjunction with kmsKeyId or customerKeyEncryptionSecret.
     #
     # Optional (defaults to "", which means SSE-C is disabled).
     customerKeyEncryptionFile: "/credentials/customer-key"
+    
+    # Specify a reference to a Kubernetes secret containing the SSE-C customer key.
+    # This allows reading the customer key directly from a Kubernetes secret without
+    # mounting it as a file. The format is: secretName/key
+    #
+    # Example: "encryption-key/customer-key"
+    #
+    # The secret must:
+    # - Exist in the Velero namespace (determined by VELERO_NAMESPACE environment variable)
+    # - Contain the specified key
+    # - The key value must be exactly 32 bytes
+    #
+    # Cannot be used in conjunction with kmsKeyId or customerKeyEncryptionFile.
+    #
+    # Optional (defaults to "", which means SSE-C is disabled).
+    customerKeyEncryptionSecret: ""
 
     # Version of the signature algorithm used to create signed URLs that are used by velero CLI to 
     # download backups or fetch logs. Possible versions are "1" and "4". Usually the default version 

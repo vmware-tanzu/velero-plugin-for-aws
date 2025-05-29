@@ -113,6 +113,102 @@ func TestObjectExists(t *testing.T) {
 	}
 }
 
+func TestSSEConfiguration(t *testing.T) {
+	testCases := []struct {
+		name        string
+		config      map[string]string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid kmsKeyId only",
+			config: map[string]string{
+				"region":   "us-east-1",
+				"kmsKeyId": "test-kms-key",
+			},
+			expectError: false,
+		},
+		{
+			name: "valid customerKeyEncryptionFile only",
+			config: map[string]string{
+				"region":                    "us-east-1",
+				"customerKeyEncryptionFile": "/path/to/key",
+			},
+			expectError: false,
+		},
+		{
+			name: "valid customerKeyEncryptionSecret only",
+			config: map[string]string{
+				"region":                      "us-east-1",
+				"customerKeyEncryptionSecret": "secret/key",
+			},
+			expectError: false,
+		},
+		{
+			name: "error when both kmsKeyId and customerKeyEncryptionFile",
+			config: map[string]string{
+				"region":                    "us-east-1",
+				"kmsKeyId":                  "test-kms-key",
+				"customerKeyEncryptionFile": "/path/to/key",
+			},
+			expectError: true,
+			errorMsg:    "you can only use one of: kmsKeyId, customerKeyEncryptionFile, or customerKeyEncryptionSecret",
+		},
+		{
+			name: "error when both kmsKeyId and customerKeyEncryptionSecret",
+			config: map[string]string{
+				"region":                      "us-east-1",
+				"kmsKeyId":                    "test-kms-key",
+				"customerKeyEncryptionSecret": "secret/key",
+			},
+			expectError: true,
+			errorMsg:    "you can only use one of: kmsKeyId, customerKeyEncryptionFile, or customerKeyEncryptionSecret",
+		},
+		{
+			name: "error when both customerKeyEncryptionFile and customerKeyEncryptionSecret",
+			config: map[string]string{
+				"region":                      "us-east-1",
+				"customerKeyEncryptionFile":   "/path/to/key",
+				"customerKeyEncryptionSecret": "secret/key",
+			},
+			expectError: true,
+			errorMsg:    "you can only use one of: kmsKeyId, customerKeyEncryptionFile, or customerKeyEncryptionSecret",
+		},
+		{
+			name: "error when all three SSE options",
+			config: map[string]string{
+				"region":                      "us-east-1",
+				"kmsKeyId":                    "test-kms-key",
+				"customerKeyEncryptionFile":   "/path/to/key",
+				"customerKeyEncryptionSecret": "secret/key",
+			},
+			expectError: true,
+			errorMsg:    "you can only use one of: kmsKeyId, customerKeyEncryptionFile, or customerKeyEncryptionSecret",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &ObjectStore{
+				log: newLogger(),
+			}
+
+			err := o.Init(tc.config)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				// We expect an error because we're not providing valid AWS config/credentials
+				// but it should not be the SSE validation error
+				if err != nil {
+					assert.NotContains(t, err.Error(), "you can only use one of")
+				}
+			}
+		})
+	}
+}
+
 func TestValidChecksumAlg(t *testing.T) {
 	tests := []struct {
 		name     string
