@@ -75,6 +75,7 @@ type ObjectStore struct {
 	preSignS3            s3PresignInterface
 	s3Uploader           *manager.Uploader
 	kmsKeyID             string
+	encryptor            *Age
 	sseCustomerKey       string
 	sseCustomerKeyMd5    string
 	signatureVersion     string
@@ -218,6 +219,13 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	} else {
 		o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
 	}
+
+	ageRecipient := os.Getenv("AGE_RECIPIENT")
+	ageKey := os.Getenv("AGE_PRIVATE_KEY")
+	if ageRecipient != "" && ageKey != "" {
+		o.encryptor = NewAge(ageRecipient, ageKey)
+		o.log.Info("Using age encryption")
+	}
 	return nil
 }
 
@@ -255,6 +263,14 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 }
 
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
+	if o.encryptor != nil {
+		encryptedReader, err := o.encryptor.Encrypt(body)
+		if err != nil {
+			return errors.Wrapf(err, "error encrypting object %s", key)
+		}
+		body = encryptedReader
+	}
+
 	input := &s3.PutObjectInput{
 		Bucket:  aws.String(bucket),
 		Key:     aws.String(key),
@@ -327,6 +343,19 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 	return true, nil
 }
 
+type readCloserChain struct {
+	plain       io.Reader
+	closeBehind io.Closer
+}
+
+func (rc *readCloserChain) Read(p []byte) (int, error) {
+	return rc.plain.Read(p)
+}
+
+func (rc *readCloserChain) Close() error {
+	return rc.closeBehind.Close()
+}
+
 func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -344,7 +373,21 @@ func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 		return nil, errors.Wrapf(err, "error getting object %s", key)
 	}
 
-	return output.Body, nil
+	if o.encryptor == nil {
+		return output.Body, nil
+	}
+
+	plainReader, err := o.encryptor.Decrypt(output.Body)
+	if err != nil {
+		output.Body.Close()
+		return nil, errors.Wrapf(err, "error decrypting object %s", key)
+	}
+
+	chained := &readCloserChain{
+		plain:       plainReader,
+		closeBehind: output.Body,
+	}
+	return chained, nil
 }
 
 func (o *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {

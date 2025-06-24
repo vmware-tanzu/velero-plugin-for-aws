@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.6
 
 require (
+	filippo.io/age v1.2.1
 	github.com/aws/aws-sdk-go-v2 v1.24.1
 	github.com/aws/aws-sdk-go-v2/config v1.26.3
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.15.11
@@ -80,6 +81,7 @@ require (
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
