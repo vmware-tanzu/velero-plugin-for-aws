@@ -2,7 +2,7 @@ module github.com/vmware-tanzu/velero-plugin-for-aws
 
 go 1.23.0
 
-toolchain go1.23.8
+toolchain go1.23.10
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.24.1
