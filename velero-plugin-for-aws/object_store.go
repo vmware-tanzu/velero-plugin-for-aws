@@ -26,6 +26,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -38,24 +39,28 @@ import (
 	"github.com/sirupsen/logrus"
 
 	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
-	s3URLKey                     = "s3Url"
-	publicURLKey                 = "publicUrl"
-	kmsKeyIDKey                  = "kmsKeyId"
-	customerKeyEncryptionFileKey = "customerKeyEncryptionFile"
-	s3ForcePathStyleKey          = "s3ForcePathStyle"
-	bucketKey                    = "bucket"
-	signatureVersionKey          = "signatureVersion"
-	credentialsFileKey           = "credentialsFile"
-	credentialProfileKey         = "profile"
-	serverSideEncryptionKey      = "serverSideEncryption"
-	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
-	caCertKey                    = "caCert"
-	enableSharedConfigKey        = "enableSharedConfig"
-	taggingKey                   = "tagging"
-	checksumAlgKey               = "checksumAlgorithm"
+	s3URLKey                       = "s3Url"
+	publicURLKey                   = "publicUrl"
+	kmsKeyIDKey                    = "kmsKeyId"
+	customerKeyEncryptionFileKey   = "customerKeyEncryptionFile"
+	customerKeyEncryptionSecretKey = "customerKeyEncryptionSecret"
+	s3ForcePathStyleKey            = "s3ForcePathStyle"
+	bucketKey                      = "bucket"
+	signatureVersionKey            = "signatureVersion"
+	credentialsFileKey             = "credentialsFile"
+	credentialProfileKey           = "profile"
+	serverSideEncryptionKey        = "serverSideEncryption"
+	insecureSkipTLSVerifyKey       = "insecureSkipTLSVerify"
+	caCertKey                      = "caCert"
+	enableSharedConfigKey          = "enableSharedConfig"
+	taggingKey                     = "tagging"
+	checksumAlgKey                 = "checksumAlgorithm"
 )
 
 type s3Interface interface {
@@ -94,6 +99,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		publicURLKey,
 		kmsKeyIDKey,
 		customerKeyEncryptionFileKey,
+		customerKeyEncryptionSecretKey,
 		s3ForcePathStyleKey,
 		signatureVersionKey,
 		credentialsFileKey,
@@ -108,17 +114,18 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	}
 
 	var (
-		region                    = config[regionKey]
-		s3URL                     = config[s3URLKey]
-		publicURL                 = config[publicURLKey]
-		kmsKeyID                  = config[kmsKeyIDKey]
-		customerKeyEncryptionFile = config[customerKeyEncryptionFileKey]
-		s3ForcePathStyleVal       = config[s3ForcePathStyleKey]
-		credentialProfile         = config[credentialProfileKey]
-		credentialsFile           = config[credentialsFileKey]
-		serverSideEncryption      = config[serverSideEncryptionKey]
-		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
-		tagging                   = config[taggingKey]
+		region                      = config[regionKey]
+		s3URL                       = config[s3URLKey]
+		publicURL                   = config[publicURLKey]
+		kmsKeyID                    = config[kmsKeyIDKey]
+		customerKeyEncryptionFile   = config[customerKeyEncryptionFileKey]
+		customerKeyEncryptionSecret = config[customerKeyEncryptionSecretKey]
+		s3ForcePathStyleVal         = config[s3ForcePathStyleKey]
+		credentialProfile           = config[credentialProfileKey]
+		credentialsFile             = config[credentialsFileKey]
+		serverSideEncryption        = config[serverSideEncryptionKey]
+		insecureSkipTLSVerifyVal    = config[insecureSkipTLSVerifyKey]
+		tagging                     = config[taggingKey]
 		// note that bucket is automatically added to the config map
 		// by the server from the ObjectStorageProviderConfig so
 		// doesn't need to be explicitly set by the user within
@@ -180,12 +187,35 @@ func (o *ObjectStore) Init(config map[string]string) error {
 	o.serverSideEncryption = serverSideEncryption
 	o.tagging = tagging
 
-	if customerKeyEncryptionFile != "" && kmsKeyID != "" {
-		return errors.Wrapf(err, "you cannot use %s and %s at the same time", kmsKeyIDKey, customerKeyEncryptionFileKey)
+	// Validate that only one SSE method is used
+	sseMethodsCount := 0
+	if kmsKeyID != "" {
+		sseMethodsCount++
+	}
+	if customerKeyEncryptionFile != "" {
+		sseMethodsCount++
+	}
+	if customerKeyEncryptionSecret != "" {
+		sseMethodsCount++
+	}
+	if sseMethodsCount > 1 {
+		return errors.New("you can only use one of: kmsKeyId, customerKeyEncryptionFile, or customerKeyEncryptionSecret")
 	}
 
+	// Handle customer key from file
 	if customerKeyEncryptionFile != "" {
 		customerKey, err := readCustomerKey(customerKeyEncryptionFile)
+		if err != nil {
+			return err
+		}
+		o.sseCustomerKey = base64.StdEncoding.EncodeToString([]byte(customerKey))
+		hash := md5.Sum([]byte(customerKey))
+		o.sseCustomerKeyMd5 = base64.StdEncoding.EncodeToString(hash[:])
+	}
+
+	// Handle customer key from secret
+	if customerKeyEncryptionSecret != "" {
+		customerKey, err := readCustomerKeyFromSecret(customerKeyEncryptionSecret)
 		if err != nil {
 			return err
 		}
@@ -252,6 +282,55 @@ func readCustomerKey(customerKeyEncryptionFile string) (string, error) {
 
 	key := string(keyBytes)
 	return key, nil
+}
+
+// readCustomerKeyFromSecret reads the SSE-C customer key from a Kubernetes secret
+// The secretRef should be in the format "secretName/key"
+// The namespace is determined from the VELERO_NAMESPACE environment variable
+func readCustomerKeyFromSecret(secretRef string) (string, error) {
+	parts := strings.Split(secretRef, "/")
+	if len(parts) != 2 {
+		return "", errors.Errorf("invalid secret reference format: %s, expected secretName/key", secretRef)
+	}
+
+	namespace := os.Getenv("VELERO_NAMESPACE")
+	if namespace == "" {
+		return "", errors.New("VELERO_NAMESPACE environment variable is not set")
+	}
+
+	secretName := parts[0]
+	keyName := parts[1]
+
+	// Create in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create in-cluster config")
+	}
+
+	// Create clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create kubernetes client")
+	}
+
+	// Get the secret
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to get secret %s/%s", namespace, secretName)
+	}
+
+	// Get the key from the secret
+	customerKeyData, exists := secret.Data[keyName]
+	if !exists {
+		return "", errors.Errorf("key %s not found in secret %s/%s", keyName, namespace, secretName)
+	}
+
+	// Validate the key length
+	if len(customerKeyData) != 32 {
+		return "", errors.Errorf("customer key from secret %s/%s/%s must be exactly 32 bytes, got %d bytes", namespace, secretName, keyName, len(customerKeyData))
+	}
+
+	return string(customerKeyData), nil
 }
 
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
