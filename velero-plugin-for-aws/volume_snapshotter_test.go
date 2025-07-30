@@ -18,10 +18,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"os"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -109,7 +112,7 @@ func TestGetVolumeIDForCSI(t *testing.T) {
 				Object: map[string]interface{}{},
 			}
 			csi := map[string]interface{}{}
-			json.Unmarshal([]byte(tt.csiJSON), &csi)
+			_ = json.Unmarshal([]byte(tt.csiJSON), &csi)
 			res.Object["spec"] = map[string]interface{}{
 				"csi": csi,
 			}
@@ -223,7 +226,7 @@ func TestSetVolumeIDForCSI(t *testing.T) {
 				Object: map[string]interface{}{},
 			}
 			csi := map[string]interface{}{}
-			json.Unmarshal([]byte(tt.csiJSON), &csi)
+			_ = json.Unmarshal([]byte(tt.csiJSON), &csi)
 			res.Object["spec"] = map[string]interface{}{
 				"csi": csi,
 			}
@@ -319,7 +322,7 @@ func TestGetTagsForCluster(t *testing.T) {
 			assert.Equal(t, test.expected, res)
 
 			if test.isNameSet {
-				os.Unsetenv("AWS_CLUSTER_NAME")
+				_ = os.Unsetenv("AWS_CLUSTER_NAME")
 			}
 		})
 	}
@@ -402,6 +405,135 @@ func TestGetTags(t *testing.T) {
 			})
 
 			assert.Equal(t, test.expected, res)
+		})
+	}
+}
+
+func TestVolumeSnapshotterInit_VolumeCreationTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         map[string]string
+		expectedError  bool
+		expectedTimeout time.Duration
+		expectedInterval time.Duration
+	}{
+		{
+			name: "default timeout and interval",
+			config: map[string]string{
+				"region": "us-east-1",
+			},
+			expectedTimeout:  defaultVolumeCreationTimeout,
+			expectedInterval: volumeStatusPollInterval,
+		},
+		{
+			name: "custom timeout and interval",
+			config: map[string]string{
+				"region":                        "us-east-1",
+				"volumeCreationTimeout":         "5m",
+				"volumeCreationPollInterval":    "30s",
+			},
+			expectedTimeout:  5 * time.Minute,
+			expectedInterval: 30 * time.Second,
+		},
+		{
+			name: "invalid timeout format",
+			config: map[string]string{
+				"region":                 "us-east-1",
+				"volumeCreationTimeout":  "invalid",
+			},
+			expectedError: true,
+		},
+		{
+			name: "invalid interval format",
+			config: map[string]string{
+				"region":                       "us-east-1",
+				"volumeCreationPollInterval":   "invalid",
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vs := newVolumeSnapshotter(logrus.New())
+			err := vs.Init(tt.config)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedTimeout, vs.volumeCreationTimeout)
+			assert.Equal(t, tt.expectedInterval, vs.volumePollInterval)
+		})
+	}
+}
+
+// mockAPIError implements smithy.APIError for testing
+type mockAPIError struct {
+	errorCode string
+	message   string
+}
+
+func (m mockAPIError) Error() string {
+	return m.message
+}
+
+func (m mockAPIError) ErrorCode() string {
+	return m.errorCode
+}
+
+func (m mockAPIError) ErrorMessage() string {
+	return m.message
+}
+
+func (m mockAPIError) ErrorFault() smithy.ErrorFault {
+	return smithy.FaultClient
+}
+
+func TestEnhanceVolumeCreationError(t *testing.T) {
+	vs := &VolumeSnapshotter{
+		log: logrus.New(),
+	}
+	volumeID := "vol-123456"
+
+	tests := []struct {
+		name          string
+		inputError    error
+		expectedError string
+	}{
+		{
+			name:          "UnauthorizedOperation error",
+			inputError:    mockAPIError{errorCode: "UnauthorizedOperation", message: "access denied"},
+			expectedError: "insufficient permissions to access volume vol-123456 or related KMS key. Required KMS permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant. Original error: access denied",
+		},
+		{
+			name:          "InvalidKey.Malformed error",
+			inputError:    mockAPIError{errorCode: "InvalidKey.Malformed", message: "invalid key"},
+			expectedError: "KMS key access failed for volume vol-123456. Ensure the KMS key exists and grants necessary permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant. Original error: invalid key",
+		},
+		{
+			name:          "KMSKeyNotAccessibleFault error",
+			inputError:    mockAPIError{errorCode: "KMSKeyNotAccessibleFault", message: "kms key not accessible"},
+			expectedError: "KMS key access failed for volume vol-123456. Ensure the KMS key exists and grants necessary permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant. Original error: kms key not accessible",
+		},
+		{
+			name:          "Other API error",
+			inputError:    mockAPIError{errorCode: "SomeOtherError", message: "some other error"},
+			expectedError: "failed to verify volume vol-123456 creation status: some other error",
+		},
+		{
+			name:          "Non-API error",
+			inputError:    errors.New("generic error"),
+			expectedError: "failed to verify volume vol-123456 creation status: generic error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := vs.enhanceVolumeCreationError(tt.inputError, volumeID)
+			assert.Contains(t, result.Error(), tt.expectedError)
 		})
 	}
 }
