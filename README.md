@@ -19,13 +19,13 @@ Below is a listing of plugin versions and respective Velero versions that are co
 
 | Plugin Version | Velero Version |
 |----------------|----------------|
+| v1.13.x        | v1.17.x        |
 | v1.12.x        | v1.16.x        |
 | v1.11.x        | v1.15.x        |
 | v1.10.x        | v1.14.x        |
 | v1.9.x         | v1.13.x        |
-| v1.8.x         | v1.12.x        |
 
-## Non-AWS S3 compatible provider known issues with plugin v1.10.x (aws-sdk-go-v2):
+## Non-AWS S3 compatible provider known issues with plugin v1.13.x (aws-sdk-go-v2):
 | Cloud Provider      |Notes|Velero Issue|Cloud Provider Issue|
 |-|-|-|-|
 |Google Cloud Storage|[Should use GCP plugin instead](https://github.com/vmware-tanzu/velero-plugin-for-gcp)||https://issuetracker.google.com/issues/256641357|
@@ -279,7 +279,7 @@ Install Velero, including all prerequisites, into the cluster and start the depl
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.10.0 \
+    --plugins velero/velero-plugin-for-aws:v1.13.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
@@ -291,7 +291,7 @@ velero install \
 ```bash
 velero install \
     --provider aws \
-    --plugins velero/velero-plugin-for-aws:v1.10.0 \
+    --plugins velero/velero-plugin-for-aws:v1.13.0 \
     --bucket $BUCKET \
     --backup-location-config region=$REGION \
     --snapshot-location-config region=$REGION \
