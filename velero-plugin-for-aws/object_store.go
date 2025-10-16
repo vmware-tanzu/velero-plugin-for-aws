@@ -482,11 +482,35 @@ func (o *ObjectStore) DeleteObject(bucket, key string) error {
 	return errors.Wrapf(err, "error deleting object %s", key)
 }
 
+// CreateSignedURL generates a pre-signed URL for accessing an S3 object.
+//
+// For SSE-C encrypted objects, the SSE-C headers are included in the signature calculation.
+// IMPORTANT: When using the returned pre-signed URL, the client MUST provide the same
+// SSE-C headers in their HTTP request:
+//   - x-amz-server-side-encryption-customer-algorithm: AES256
+//   - x-amz-server-side-encryption-customer-key: <base64-encoded-key>
+//   - x-amz-server-side-encryption-customer-key-MD5: <base64-encoded-MD5>
+//
+// The pre-signed URL alone is not sufficient - the headers must be added by the client
+// when making the HTTP request. This ensures that only clients with the encryption key
+// can access SSE-C encrypted objects.
+//
+// Reference: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
-	req, err := o.preSignS3.PresignGetObject(context.Background(), &s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-	}, func(opts *s3.PresignOptions) {
+	}
+
+	// Include SSE-C headers in the pre-sign request so they are part of the signature.
+	// The client must provide these same headers when using the pre-signed URL.
+	if o.sseCustomerKey != "" {
+		input.SSECustomerAlgorithm = aws.String("AES256")
+		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
+	}
+
+	req, err := o.preSignS3.PresignGetObject(context.Background(), input, func(opts *s3.PresignOptions) {
 		opts.Expires = ttl
 	})
 

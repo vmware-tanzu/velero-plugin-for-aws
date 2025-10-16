@@ -18,7 +18,10 @@ package main
 
 import (
 	"context"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"testing"
@@ -36,6 +39,18 @@ type mockS3 struct {
 func (m *mockS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
 	args := m.Called(ctx, input)
 	return args.Get(0).(*s3.HeadObjectOutput), args.Error(1)
+}
+
+type mockS3Presign struct {
+	mock.Mock
+}
+
+func (m *mockS3Presign) PresignGetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(options *s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	args := m.Called(ctx, input, optFns)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*v4.PresignedHTTPRequest), args.Error(1)
 }
 
 func (m *mockS3) GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -245,6 +260,98 @@ func TestValidChecksumAlg(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, validChecksumAlg(tc.input))
+		})
+	}
+}
+
+func TestCreateSignedURL(t *testing.T) {
+	tests := []struct {
+		name              string
+		sseCustomerKey    string
+		sseCustomerKeyMd5 string
+		expectedURL       string
+		expectedError     error
+	}{
+		{
+			name:          "without SSE-C",
+			expectedURL:   "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=test",
+			expectedError: nil,
+		},
+		{
+			name:              "with SSE-C",
+			sseCustomerKey:    "dGVzdGtleTE2Ynl0ZXN0ZXN0a2V5MTY=", // base64-encoded 32-byte key
+			sseCustomerKeyMd5: "ZjQrne1X/iTcskbY2m3example",        // base64-encoded MD5 of key
+			expectedURL:       "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=test",
+			expectedError:     nil,
+		},
+		{
+			name:          "presign error",
+			expectedURL:   "",
+			expectedError: errors.New("presign failed"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockPresign := new(mockS3Presign)
+			defer mockPresign.AssertExpectations(t)
+
+			o := &ObjectStore{
+				log:               newLogger(),
+				preSignS3:         mockPresign,
+				sseCustomerKey:    tc.sseCustomerKey,
+				sseCustomerKeyMd5: tc.sseCustomerKeyMd5,
+			}
+
+			bucket := "test-bucket"
+			key := "test-key"
+			ttl := 1 * time.Hour
+
+			// Build expected input based on AWS S3 GetObject API requirements
+			// Reference: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
+			//
+			// When using server-side encryption with customer-provided keys (SSE-C),
+			// the following headers are required in the GetObject request:
+			// - x-amz-server-side-encryption-customer-algorithm (e.g., "AES256")
+			// - x-amz-server-side-encryption-customer-key (base64-encoded 32-byte encryption key)
+			// - x-amz-server-side-encryption-customer-key-MD5 (base64-encoded MD5 digest of the key)
+			//
+			// IMPORTANT: These headers must be included when generating the pre-signed URL
+			// so that they are part of the signature. When using the pre-signed URL, the
+			// client must add these same headers to their HTTP request. The pre-signed URL
+			// alone is not sufficient - the client must provide the headers with the
+			// encryption key to access the object.
+			expectedInput := &s3.GetObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+			}
+			if tc.sseCustomerKey != "" {
+				expectedInput.SSECustomerAlgorithm = aws.String("AES256")
+				expectedInput.SSECustomerKey = &tc.sseCustomerKey
+				expectedInput.SSECustomerKeyMD5 = &tc.sseCustomerKeyMd5
+			}
+
+			// Mock the presign call
+			if tc.expectedError != nil {
+				mockPresign.On("PresignGetObject", context.Background(), expectedInput, mock.Anything).
+					Return(nil, tc.expectedError)
+			} else {
+				mockPresign.On("PresignGetObject", context.Background(), expectedInput, mock.Anything).
+					Return(&v4.PresignedHTTPRequest{
+						URL: tc.expectedURL,
+					}, nil)
+			}
+
+			// Call CreateSignedURL
+			url, err := o.CreateSignedURL(bucket, key, ttl)
+
+			if tc.expectedError != nil {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedURL, url)
+			}
 		})
 	}
 }
