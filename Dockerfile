@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.24.9-bookworm AS build
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -29,6 +29,7 @@ WORKDIR /go/src/velero-plugin-for-aws
 RUN export GOARM=$( echo "${GOARM}" | cut -c2-) && \
     CGO_ENABLED=0 go build -v -o /go/bin/velero-plugin-for-aws ./velero-plugin-for-aws && \
     CGO_ENABLED=0 go build -v -o /go/bin/cp-plugin ./hack/cp-plugin
+
 FROM scratch
 LABEL org.opencontainers.image.source="https://github.com/vmware-tanzu/velero-plugin-for-aws"
 COPY --from=build /go/bin/velero-plugin-for-aws /plugins/
