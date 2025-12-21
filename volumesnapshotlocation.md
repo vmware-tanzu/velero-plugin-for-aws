@@ -29,7 +29,7 @@ spec:
     region: us-east-1
 
     # AWS profile within the credentials file to use for the volume snapshot location.
-    # 
+    #
     # Optional (defaults to "default").
     profile: "default"
 
@@ -38,4 +38,12 @@ spec:
     #
     # Optional (defaults to "false").
     enableSharedConfig: "true"
+
+    # The KMS key ID to use for encrypting EBS volumes restored from snapshots.
+    # If not specified, volumes will inherit encryption settings from the snapshot.
+    # Supports multiple formats: Key ID, Key alias (e.g., "alias/my-key"),
+    # Key ARN, or Alias ARN.
+    #
+    # Optional.
+    ebsKmsKeyId: "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
 ```
