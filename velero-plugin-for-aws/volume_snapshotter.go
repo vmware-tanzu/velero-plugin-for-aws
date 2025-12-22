@@ -49,9 +49,9 @@ const (
 var iopsVolumeTypes = sets.NewString("io1", "io2")
 
 type VolumeSnapshotter struct {
-	log          logrus.FieldLogger
-	ec2          *ec2.Client
-	ebsKmsKeyId  string
+	log         logrus.FieldLogger
+	ec2         *ec2.Client
+	ebsKmsKeyId string
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -114,6 +114,9 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 	}
 
 	if b.ebsKmsKeyId != "" {
+		// When KmsKeyId is specified, Encrypted must be set to true
+		encrypted := true
+		input.Encrypted = &encrypted
 		input.KmsKeyId = &b.ebsKmsKeyId
 	}
 
