@@ -7,7 +7,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.18
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.305.2
+	github.com/aws/aws-sdk-go-v2/service/kms v1.49.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1
 	github.com/aws/smithy-go v1.27.1
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.4
@@ -33,7 +35,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
