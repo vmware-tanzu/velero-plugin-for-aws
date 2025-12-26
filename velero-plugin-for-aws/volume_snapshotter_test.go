@@ -17,15 +17,16 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	"os"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -536,4 +537,27 @@ func TestEnhanceVolumeCreationError(t *testing.T) {
 			assert.Contains(t, result.Error(), tt.expectedError)
 		})
 	}
+}
+
+func TestVerifyKMSKeyAccess_NilKey(t *testing.T) {
+	vs := &VolumeSnapshotter{
+		log: logrus.New(),
+	}
+
+	// nil key should skip the check and return nil
+	ctx := context.Background()
+	err := vs.verifyKMSKeyAccess(ctx, nil)
+	assert.NoError(t, err)
+}
+
+func TestVerifyKMSKeyAccess_EmptyKey(t *testing.T) {
+	vs := &VolumeSnapshotter{
+		log: logrus.New(),
+	}
+
+	// empty key should skip the check and return nil
+	ctx := context.Background()
+	emptyKey := ""
+	err := vs.verifyKMSKeyAccess(ctx, &emptyKey)
+	assert.NoError(t, err)
 }
