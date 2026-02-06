@@ -483,10 +483,18 @@ func (o *ObjectStore) DeleteObject(bucket, key string) error {
 }
 
 func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
-	req, err := o.preSignS3.PresignGetObject(context.Background(), &s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-	}, func(opts *s3.PresignOptions) {
+	}
+
+	if o.sseCustomerKey != "" {
+		input.SSECustomerAlgorithm = aws.String("AES256")
+		input.SSECustomerKey = &o.sseCustomerKey
+		input.SSECustomerKeyMD5 = &o.sseCustomerKeyMd5
+	}
+
+	req, err := o.preSignS3.PresignGetObject(context.Background(), input, func(opts *s3.PresignOptions) {
 		opts.Expires = ttl
 	})
 
