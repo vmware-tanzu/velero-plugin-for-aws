@@ -19,13 +19,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/smithy-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -37,8 +41,14 @@ import (
 )
 
 const (
-	regionKey    = "region"
-	ebsCSIDriver = "ebs.csi.aws.com"
+	regionKey                      = "region"
+	ebsCSIDriver                   = "ebs.csi.aws.com"
+	volumeCreationTimeoutKey       = "volumeCreationTimeout"
+	volumeCreationPollIntervalKey  = "volumeCreationPollInterval"
+	
+	// Volume creation verification settings
+	defaultVolumeCreationTimeout = 10 * time.Minute
+	volumeStatusPollInterval     = 15 * time.Second
 )
 
 // iopsVolumeTypes is a set of AWS EBS volume types for which IOPS should
@@ -47,8 +57,12 @@ const (
 var iopsVolumeTypes = sets.NewString("io1", "io2")
 
 type VolumeSnapshotter struct {
-	log logrus.FieldLogger
-	ec2 *ec2.Client
+	log                    logrus.FieldLogger
+	ec2                    *ec2.Client
+	kms                    *kms.Client
+	sts                    *sts.Client
+	volumeCreationTimeout  time.Duration
+	volumePollInterval     time.Duration
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -56,7 +70,7 @@ func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 }
 
 func (b *VolumeSnapshotter) Init(config map[string]string) error {
-	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey, credentialsFileKey, enableSharedConfigKey); err != nil {
+	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey, credentialsFileKey, enableSharedConfigKey, volumeCreationTimeoutKey, volumeCreationPollIntervalKey); err != nil {
 		return err
 	}
 
@@ -67,6 +81,27 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
+
+	// Parse volume creation timeout
+	b.volumeCreationTimeout = defaultVolumeCreationTimeout
+	if timeoutStr := config[volumeCreationTimeoutKey]; timeoutStr != "" {
+		if timeout, err := time.ParseDuration(timeoutStr); err != nil {
+			return errors.Wrapf(err, "invalid %s duration format", volumeCreationTimeoutKey)
+		} else {
+			b.volumeCreationTimeout = timeout
+		}
+	}
+
+	// Parse volume poll interval  
+	b.volumePollInterval = volumeStatusPollInterval
+	if intervalStr := config[volumeCreationPollIntervalKey]; intervalStr != "" {
+		if interval, err := time.ParseDuration(intervalStr); err != nil {
+			return errors.Wrapf(err, "invalid %s duration format", volumeCreationPollIntervalKey)
+		} else {
+			b.volumePollInterval = interval
+		}
+	}
+
 	cfg, err := newConfigBuilder(b.log).
 		WithRegion(region).
 		WithProfile(credentialProfile).
@@ -75,6 +110,8 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 		return errors.WithStack(err)
 	}
 	b.ec2 = ec2.NewFromConfig(cfg)
+	b.kms = kms.NewFromConfig(cfg)
+	b.sts = sts.NewFromConfig(cfg)
 	return nil
 }
 
@@ -94,17 +131,32 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 		return "", errors.Errorf("expected 1 snapshot from DescribeSnapshots for %s, got %v", snapshotID, count)
 	}
 
+	snapshot := descSnapOutput.Snapshots[0]
+
+	// Check KMS permissions BEFORE CreateVolume for encrypted snapshots
+	// AWS validates KMS permissions asynchronously, so we need to verify upfront
+	// to fail fast with a clear error message
+	if snapshot.Encrypted != nil && *snapshot.Encrypted {
+		if err := b.verifyKMSKeyAccess(context.Background(), snapshot.KmsKeyId); err != nil {
+			return "", errors.Wrapf(err,
+				"cannot create volume from encrypted snapshot %s. "+
+					"IAM role needs: kms:Decrypt, kms:GenerateDataKey, kms:CreateGrant, kms:DescribeKey",
+				snapshotID)
+		}
+	}
+
 	// filter tags through getTagsForCluster() function in order to apply
 	// proper ownership tags to restored volumes
 	input := &ec2.CreateVolumeInput{
 		SnapshotId:       &snapshotID,
 		AvailabilityZone: &volumeAZ,
 		VolumeType:       types.VolumeType(volumeType),
-		Encrypted:        descSnapOutput.Snapshots[0].Encrypted,
+		Encrypted:        snapshot.Encrypted,
+		KmsKeyId:         snapshot.KmsKeyId,
 		TagSpecifications: []types.TagSpecification{
 			{
 				ResourceType: types.ResourceTypeVolume,
-				Tags:         getTagsForCluster(descSnapOutput.Snapshots[0].Tags),
+				Tags:         getTagsForCluster(snapshot.Tags),
 			},
 		},
 	}
@@ -119,7 +171,15 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 		return "", errors.WithStack(err)
 	}
 
-	return *output.VolumeId, nil
+	volumeID = *output.VolumeId
+	
+	// Verify that the volume is actually created and available
+	// This is critical for detecting KMS permission failures and other async errors
+	if err := b.waitForVolumeAvailable(volumeID); err != nil {
+		return "", errors.Wrapf(err, "volume creation failed for snapshot %s", snapshotID)
+	}
+
+	return volumeID, nil
 }
 
 func (b *VolumeSnapshotter) GetVolumeInfo(volumeID, volumeAZ string) (string, *int64, error) {
@@ -157,6 +217,153 @@ func (b *VolumeSnapshotter) describeVolume(volumeID string) (types.Volume, error
 	}
 
 	return output.Volumes[0], nil
+}
+
+// waitForVolumeAvailable polls the volume status until it becomes available or times out.
+// This is essential for detecting KMS permission failures and other async volume creation errors.
+func (b *VolumeSnapshotter) waitForVolumeAvailable(volumeID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), b.volumeCreationTimeout)
+	defer cancel()
+
+	b.log.WithFields(logrus.Fields{
+		"volumeID": volumeID,
+		"timeout":  b.volumeCreationTimeout,
+		"interval": b.volumePollInterval,
+	}).Info("Waiting for volume to become available")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.Errorf("timeout waiting for volume %s to become available after %v. Check AWS CloudTrail for detailed error information", volumeID, b.volumeCreationTimeout)
+		default:
+		}
+
+		volume, err := b.describeVolume(volumeID)
+		if err != nil {
+			// Check if volume doesn't exist yet (still being created)
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) {
+				if apiErr.ErrorCode() == "InvalidVolume.NotFound" {
+					b.log.WithField("volumeID", volumeID).Debug("Volume not found yet, continuing to wait")
+					time.Sleep(b.volumePollInterval)
+					continue
+				}
+			}
+			
+			// For other errors, return immediately with enhanced context
+			return b.enhanceVolumeCreationError(err, volumeID)
+		}
+
+		state := volume.State
+		b.log.WithFields(logrus.Fields{
+			"volumeID": volumeID,
+			"state":    state,
+		}).Debug("Volume status check")
+
+		switch state {
+		case types.VolumeStateAvailable:
+			b.log.WithField("volumeID", volumeID).Info("Volume successfully created and available")
+			return nil
+		case types.VolumeStateError:
+			return errors.Errorf("volume %s creation failed with state 'error'. This often indicates KMS permission issues for encrypted snapshots. Required KMS permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant", volumeID)
+		case types.VolumeStateCreating:
+			// Volume is still being created, continue waiting
+			b.log.WithField("volumeID", volumeID).Debug("Volume is still being created")
+		default:
+			b.log.WithFields(logrus.Fields{
+				"volumeID": volumeID,
+				"state":    state,
+			}).Debug("Volume in intermediate state, continuing to wait")
+		}
+
+		time.Sleep(b.volumePollInterval)
+	}
+}
+
+// enhanceVolumeCreationError provides more detailed error messages for common volume creation failures
+func (b *VolumeSnapshotter) enhanceVolumeCreationError(err error, volumeID string) error {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "UnauthorizedOperation":
+			return errors.Errorf("insufficient permissions to access volume %s or related KMS key. Required KMS permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant. Original error: %v", volumeID, err)
+		case "InvalidKey.Malformed", "KMSKeyNotAccessibleFault":
+			return errors.Errorf("KMS key access failed for volume %s. Ensure the KMS key exists and grants necessary permissions: kms:Decrypt, kms:ReEncrypt*, kms:CreateGrant. Original error: %v", volumeID, err)
+		default:
+			return errors.Wrapf(err, "failed to verify volume %s creation status", volumeID)
+		}
+	}
+	return errors.Wrapf(err, "failed to verify volume %s creation status", volumeID)
+}
+
+// verifyKMSKeyAccess checks that the caller has the necessary KMS permissions to create a volume
+// from an encrypted snapshot. This is called before CreateVolume to fail fast with a clear error
+// message, since AWS validates KMS permissions asynchronously after CreateVolume returns.
+func (b *VolumeSnapshotter) verifyKMSKeyAccess(ctx context.Context, kmsKeyID *string) error {
+	if kmsKeyID == nil || *kmsKeyID == "" {
+		return nil // Not encrypted or no key specified, skip check
+	}
+
+	b.log.WithField("kmsKeyID", *kmsKeyID).Info("Checking KMS key access before volume creation")
+
+	// 1. Check if key exists and is enabled
+	describeOutput, err := b.kms.DescribeKey(ctx, &kms.DescribeKeyInput{
+		KeyId: kmsKeyID,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "KMS key %s is not accessible. Need kms:DescribeKey permission", *kmsKeyID)
+	}
+
+	if describeOutput.KeyMetadata.KeyState != kmstypes.KeyStateEnabled {
+		return errors.Errorf("KMS key %s is in state %s, must be Enabled", *kmsKeyID, describeOutput.KeyMetadata.KeyState)
+	}
+
+	// 2. Test GenerateDataKey permission (needed for encryption)
+	testGen, err := b.kms.GenerateDataKey(ctx, &kms.GenerateDataKeyInput{
+		KeyId:   kmsKeyID,
+		KeySpec: kmstypes.DataKeySpecAes256,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "missing kms:GenerateDataKey permission for key %s", *kmsKeyID)
+	}
+
+	// 3. Test Decrypt permission
+	_, err = b.kms.Decrypt(ctx, &kms.DecryptInput{
+		CiphertextBlob: testGen.CiphertextBlob,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "missing kms:Decrypt permission for key %s", *kmsKeyID)
+	}
+
+	// 4. Test CreateGrant permission (critical for EC2 encrypted volume creation)
+	// EC2 requires kms:CreateGrant to create volumes from encrypted snapshots
+	// Get caller identity to use as grantee
+	callerIdentity, err := b.sts.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return errors.Wrapf(err, "failed to get caller identity for KMS grant test")
+	}
+
+	// Try to create a grant (EC2 needs this permission to access the key during volume creation)
+	grantOutput, err := b.kms.CreateGrant(ctx, &kms.CreateGrantInput{
+		KeyId:            kmsKeyID,
+		GranteePrincipal: callerIdentity.Arn,
+		Operations: []kmstypes.GrantOperation{
+			kmstypes.GrantOperationDecrypt,
+			kmstypes.GrantOperationGenerateDataKey,
+		},
+	})
+	if err != nil {
+		return errors.Wrapf(err, "missing kms:CreateGrant permission for key %s. "+
+			"This permission is required for EC2 to create volumes from encrypted snapshots", *kmsKeyID)
+	}
+
+	// Immediately retire the grant to clean up (ignore errors since this is just cleanup)
+	_, _ = b.kms.RetireGrant(ctx, &kms.RetireGrantInput{
+		GrantToken: grantOutput.GrantToken,
+	})
+
+	b.log.WithField("kmsKeyID", *kmsKeyID).Info("KMS permissions verified successfully")
+	return nil
 }
 
 func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[string]string) (string, error) {
