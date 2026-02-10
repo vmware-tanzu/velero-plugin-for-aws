@@ -19,12 +19,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -37,8 +38,9 @@ import (
 )
 
 const (
-	regionKey    = "region"
-	ebsCSIDriver = "ebs.csi.aws.com"
+	regionKey      = "region"
+	ebsKmsKeyIDKey = "ebsKmsKeyId"
+	ebsCSIDriver   = "ebs.csi.aws.com"
 )
 
 // iopsVolumeTypes is a set of AWS EBS volume types for which IOPS should
@@ -47,8 +49,9 @@ const (
 var iopsVolumeTypes = sets.NewString("io1", "io2")
 
 type VolumeSnapshotter struct {
-	log logrus.FieldLogger
-	ec2 *ec2.Client
+	log         logrus.FieldLogger
+	ec2         *ec2.Client
+	ebsKmsKeyId string
 }
 
 func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
@@ -56,13 +59,14 @@ func newVolumeSnapshotter(logger logrus.FieldLogger) *VolumeSnapshotter {
 }
 
 func (b *VolumeSnapshotter) Init(config map[string]string) error {
-	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey, credentialsFileKey, enableSharedConfigKey); err != nil {
+	if err := veleroplugin.ValidateVolumeSnapshotterConfigKeys(config, regionKey, credentialProfileKey, credentialsFileKey, enableSharedConfigKey, ebsKmsKeyIDKey); err != nil {
 		return err
 	}
 
 	region := config[regionKey]
 	credentialProfile := config[credentialProfileKey]
 	credentialsFile := config[credentialsFileKey]
+	b.ebsKmsKeyId = config[ebsKmsKeyIDKey]
 
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
@@ -107,6 +111,13 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 				Tags:         getTagsForCluster(descSnapOutput.Snapshots[0].Tags),
 			},
 		},
+	}
+
+	if b.ebsKmsKeyId != "" {
+		// When KmsKeyId is specified, Encrypted must be set to true
+		encrypted := true
+		input.Encrypted = &encrypted
+		input.KmsKeyId = &b.ebsKmsKeyId
 	}
 
 	if iopsVolumeTypes.Has(volumeType) && iops != nil {

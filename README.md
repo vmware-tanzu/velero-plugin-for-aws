@@ -479,6 +479,59 @@ Copy one of the returned IDs `<ID>` and use it with the `aws` CLI tool to search
     aws ec2 describe-tags --filters "Name=resource-id,Values=<ID>" "Name=key,Values=KubernetesCluster"
     ```
 
+## KMS Encryption for Volume Restoration
+
+When using the `ebsKmsKeyId` parameter to encrypt restored volumes, the IAM user or role used by Velero must have the following KMS permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:Encrypt",
+        "kms:DescribeKey",
+        "kms:Decrypt",
+        "kms:CreateGrant",
+        "kms:ListGrants",
+        "kms:RevokeGrant",
+        "kms:RetireGrant",
+        "kms:ListRetirableGrants"
+      ],
+      "Resource": "arn:aws:kms:us-east-1:123456789012:key/*"
+    }
+  ]
+}
+```
+
+Additionally, the KMS key policy must allow the EC2 service to use the key:
+
+```json
+{
+  "Sid": "Allow EC2 to use the key for EBS encryption",
+  "Effect": "Allow",
+  "Principal": {
+    "Service": "ec2.amazonaws.com"
+  },
+  "Action": [
+    "kms:Decrypt",
+    "kms:CreateGrant",
+    "kms:DescribeKey",
+    "kms:ReEncryptFrom",
+    "kms:ReEncryptTo"
+  ],
+  "Resource": "*"
+}
+```
+
+**Important notes:**
+* The KMS key must be in the same region as the EBS volumes/snapshots
+* The KMS key must be in the `Enabled` state
+* Without proper permissions, volume restoration will fail with `AccessDeniedException` or the volume will be created but immediately deleted by AWS
+
 
 [1]: #Create-S3-bucket
 [2]: #Set-permissions-for-Velero
