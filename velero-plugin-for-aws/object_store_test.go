@@ -18,11 +18,13 @@ package main
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"testing"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -31,6 +33,15 @@ import (
 
 type mockS3 struct {
 	mock.Mock
+}
+
+type mockS3Presign struct {
+	mock.Mock
+}
+
+func (m *mockS3Presign) PresignGetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	args := m.Called(ctx, input)
+	return args.Get(0).(*v4.PresignedHTTPRequest), args.Error(1)
 }
 
 func (m *mockS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
@@ -247,4 +258,138 @@ func TestValidChecksumAlg(t *testing.T) {
 			assert.Equal(t, tc.expected, validChecksumAlg(tc.input))
 		})
 	}
+}
+
+func TestCreateSignedURL(t *testing.T) {
+	tests := []struct {
+		name              string
+		sseCustomerKey    string
+		sseCustomerKeyMd5 string
+		bucket            string
+		key               string
+		ttl               time.Duration
+		expectedURL       string
+		expectedError     string
+	}{
+		{
+			name:        "without SSE-C",
+			bucket:      "test-bucket",
+			key:         "test-key",
+			ttl:         time.Hour,
+			expectedURL: "https://test-bucket.s3.amazonaws.com/test-key?signed=true",
+		},
+		{
+			name:              "with SSE-C",
+			sseCustomerKey:    "dGVzdC1rZXktMzItYnl0ZXMtbG9uZy4uLi4=",
+			sseCustomerKeyMd5: "test-md5-hash",
+			bucket:            "test-bucket",
+			key:               "test-key",
+			ttl:               time.Hour,
+			expectedURL:       "https://test-bucket.s3.amazonaws.com/test-key?signed=true&sse-c=true",
+		},
+		{
+			name:          "presign error",
+			bucket:        "test-bucket",
+			key:           "test-key",
+			ttl:           time.Hour,
+			expectedError: "presign error",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			presignMock := new(mockS3Presign)
+			defer presignMock.AssertExpectations(t)
+
+			o := &ObjectStore{
+				log:               newLogger(),
+				preSignS3:         presignMock,
+				sseCustomerKey:    tc.sseCustomerKey,
+				sseCustomerKeyMd5: tc.sseCustomerKeyMd5,
+			}
+
+			expectedInput := &s3.GetObjectInput{
+				Bucket: aws.String(tc.bucket),
+				Key:    aws.String(tc.key),
+			}
+
+			if tc.sseCustomerKey != "" {
+				expectedInput.SSECustomerAlgorithm = aws.String("AES256")
+				expectedInput.SSECustomerKey = &tc.sseCustomerKey
+				expectedInput.SSECustomerKeyMD5 = &tc.sseCustomerKeyMd5
+			}
+
+			if tc.expectedError != "" {
+				presignMock.On("PresignGetObject", context.Background(), expectedInput).
+					Return(&v4.PresignedHTTPRequest{}, errors.New(tc.expectedError))
+			} else {
+				presignMock.On("PresignGetObject", context.Background(), expectedInput).
+					Return(&v4.PresignedHTTPRequest{URL: tc.expectedURL}, nil)
+			}
+
+			url, err := o.CreateSignedURL(tc.bucket, tc.key, tc.ttl)
+
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedURL, url)
+		})
+	}
+}
+
+func TestCreateSignedURL_SSECHeadersIncluded(t *testing.T) {
+	presignMock := new(mockS3Presign)
+	defer presignMock.AssertExpectations(t)
+
+	sseKey := "base64-encoded-key"
+	sseMd5 := "base64-encoded-md5"
+
+	o := &ObjectStore{
+		log:               newLogger(),
+		preSignS3:         presignMock,
+		sseCustomerKey:    sseKey,
+		sseCustomerKeyMd5: sseMd5,
+	}
+
+	// Verify the input includes SSE-C parameters
+	presignMock.On("PresignGetObject", context.Background(), mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+		return input.SSECustomerAlgorithm != nil &&
+			*input.SSECustomerAlgorithm == "AES256" &&
+			input.SSECustomerKey != nil &&
+			*input.SSECustomerKey == sseKey &&
+			input.SSECustomerKeyMD5 != nil &&
+			*input.SSECustomerKeyMD5 == sseMd5
+	})).Return(&v4.PresignedHTTPRequest{URL: "https://example.com/signed"}, nil)
+
+	url, err := o.CreateSignedURL("bucket", "key", time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/signed", url)
+}
+
+func TestCreateSignedURL_NoSSECWhenNotConfigured(t *testing.T) {
+	presignMock := new(mockS3Presign)
+	defer presignMock.AssertExpectations(t)
+
+	o := &ObjectStore{
+		log:       newLogger(),
+		preSignS3: presignMock,
+		// No SSE-C configured
+	}
+
+	// Verify the input does NOT include SSE-C parameters
+	presignMock.On("PresignGetObject", context.Background(), mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+		return input.SSECustomerAlgorithm == nil &&
+			input.SSECustomerKey == nil &&
+			input.SSECustomerKeyMD5 == nil
+	})).Return(&v4.PresignedHTTPRequest{URL: "https://example.com/signed"}, nil)
+
+	url, err := o.CreateSignedURL("bucket", "key", time.Hour)
+
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/signed", url)
 }
