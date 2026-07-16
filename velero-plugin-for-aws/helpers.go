@@ -38,9 +38,6 @@ func IsValidS3URLScheme(s3URL string) bool {
 
 func CheckTags(tagging string) error {
 	tags := strings.Split(tagging, "&")
-	if len(tags) == 1 {
-		return errors.New("Tags are not seperated with an &")
-	}
 	for c, j := range tags {
 		if c > 9 {
 			return errors.New("Aws S3 allows only ten tags per object")
@@ -52,7 +49,7 @@ func CheckTags(tagging string) error {
 			if len([]rune(tg[0])) > 128 {
 				return errors.New("An S3 tag key can not be more than 128 Unicode characters in length")
 			} else {
-				if len([]rune(tg[1])) > 248 {
+				if len([]rune(tg[1])) > 256 {
 					return errors.New("An S3 tag values can not be more 256 Unicode characters in length")
 				}
 			}
