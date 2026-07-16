@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,10 @@ func TestS3Tags(t *testing.T) {
 	assert.Error(t, CheckTags("96FrFmTtJcBkEYEVtS3Bxrv2E37KG9m3M9CJqbtVCw7gy4UBEvpBC4h6xdV7FUBag7XeZhccvQuY8AgERdeWafBZRR7NRb8BnA6CkcqDHPpPPFpwLzXenjxZmeRK6J9hty=Value1&Key2=Value2&Key3=Value3"))
 	assert.Error(t, CheckTags("Key1=Value1&Key2=tka2MYGaFegMVkdm5nC58D46dyXCDbKcXnCZNrCHyS6s8TtMacs9HFXpGCNr2PVntCHArkKbgyYntVhBn2AAJXdKkvA9jdRrc4vCsYzCSZ4ZhCR7PBaKgMMdTtz93jRZNNFJcAqzrybDqCEmtKfFj3MdxLSvjej9tqP8bUt66449ZCbPuk8b7ASrYkPf6fQVYXM9rbmtyzWbhxtYdZs7nUaE4pQqtEfggqSEGbNaNWSf6x6vjUVJ2fAsZNfwKMxUwe"))
 	assert.Error(t, CheckTags("Key1=Value1&Key2=Value2&Key3-Value3&Key4=Value4&Key5=Value5&Key6=Value6&Key7=Value7&Key8=Value8&Key9=Value9&key10=Value10&Key11=Value11"))
+	assert.Nil(t, CheckTags("Key1=Value1"))
 	assert.Nil(t, CheckTags("Key1=Value1&Key2=Value2"))
+	assert.Nil(t, CheckTags("Key1="+strings.Repeat("a", 256)))
+	assert.Nil(t, CheckTags("Key1=Value1&Key2="+strings.Repeat("a", 256)))
+	assert.Error(t, CheckTags("Key1="+strings.Repeat("a", 257)))
 	assert.ErrorIs(t, CheckTags("Key1=Value1&Key2=Value2&Key3=Value3"), nil)
 }
