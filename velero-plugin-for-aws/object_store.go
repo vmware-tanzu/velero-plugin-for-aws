@@ -182,7 +182,11 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		return errors.WithStack(err)
 	}
 	o.s3 = client
-	o.s3Uploader = manager.NewUploader(client)
+	// The transfer manager keeps its own setting and does not inherit the client's.
+	// See https://github.com/velero-io/velero/issues/9804
+	o.s3Uploader = manager.NewUploader(client, func(u *manager.Uploader) {
+		u.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+	})
 	o.kmsKeyID = kmsKeyID
 	o.serverSideEncryption = serverSideEncryption
 	o.tagging = tagging

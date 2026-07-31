@@ -1,0 +1,1 @@
+Also opt the S3 transfer manager out of automatic checksums, so multipart uploads work on backends that reject the aws-chunked trailer.
