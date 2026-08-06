@@ -25,6 +25,7 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -467,4 +468,113 @@ func TestBuildPutObjectInput(t *testing.T) {
 			assert.Equal(t, tc.expectSSECustomerKeyMD5, input.SSECustomerKeyMD5, "SSECustomerKeyMD5 mismatch")
 		})
 	}
+}
+
+func TestWrapSSECError(t *testing.T) {
+	tests := []struct {
+		name           string
+		sseCustomerKey string
+		inputErr       error
+		expectContains string
+		expectWrapped  bool
+	}{
+		{
+			name:           "nil error returns nil",
+			sseCustomerKey: "some-key",
+			inputErr:       nil,
+		},
+		{
+			name:           "AccessDenied with SSE-C configured wraps with guidance",
+			sseCustomerKey: "some-key",
+			inputErr:       &smithy.GenericAPIError{Code: "AccessDenied", Message: "Access Denied"},
+			expectContains: "SSE-C encryption was denied by S3",
+			expectWrapped:  true,
+		},
+		{
+			name:           "AccessDenied without SSE-C configured returns original error",
+			sseCustomerKey: "",
+			inputErr:       &smithy.GenericAPIError{Code: "AccessDenied", Message: "Access Denied"},
+			expectContains: "Access Denied",
+			expectWrapped:  false,
+		},
+		{
+			name:           "non-AccessDenied error with SSE-C configured returns original error",
+			sseCustomerKey: "some-key",
+			inputErr:       &smithy.GenericAPIError{Code: "NoSuchBucket", Message: "bucket not found"},
+			expectContains: "bucket not found",
+			expectWrapped:  false,
+		},
+		{
+			name:           "non-API error with SSE-C configured returns original error",
+			sseCustomerKey: "some-key",
+			inputErr:       errors.New("connection refused"),
+			expectContains: "connection refused",
+			expectWrapped:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &ObjectStore{
+				log:            newLogger(),
+				sseCustomerKey: tc.sseCustomerKey,
+			}
+
+			result := o.wrapSSECError(tc.inputErr, "TestOp")
+
+			if tc.inputErr == nil {
+				assert.NoError(t, result)
+				return
+			}
+
+			require.Error(t, result)
+			assert.Contains(t, result.Error(), tc.expectContains)
+
+			if tc.expectWrapped {
+				assert.Contains(t, result.Error(), "PutBucketEncryption")
+				assert.Contains(t, result.Error(), "TestOp")
+			}
+		})
+	}
+}
+
+func TestObjectExists_SSECAccessDenied(t *testing.T) {
+	s := new(mockS3)
+	defer s.AssertExpectations(t)
+
+	o := &ObjectStore{
+		log:            newLogger(),
+		s3:             s,
+		sseCustomerKey: "some-key",
+	}
+
+	s.On("HeadObject", context.Background(), mock.Anything).Return(
+		&s3.HeadObjectOutput{},
+		&smithy.GenericAPIError{Code: "AccessDenied", Message: "Access Denied"},
+	)
+
+	_, err := o.ObjectExists("bucket", "key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SSE-C encryption was denied by S3")
+	assert.Contains(t, err.Error(), "PutBucketEncryption")
+}
+
+func TestGetObject_SSECAccessDenied(t *testing.T) {
+	s := new(mockS3)
+	defer s.AssertExpectations(t)
+
+	o := &ObjectStore{
+		log:            newLogger(),
+		s3:             s,
+		sseCustomerKey: "some-key",
+	}
+
+	s.On("GetObject", context.Background(), mock.Anything).Return(
+		&s3.GetObjectOutput{},
+		&smithy.GenericAPIError{Code: "AccessDenied", Message: "Access Denied"},
+	)
+
+	_, err := o.GetObject("bucket", "key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SSE-C encryption was denied by S3")
 }

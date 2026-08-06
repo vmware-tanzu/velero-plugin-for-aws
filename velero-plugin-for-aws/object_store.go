@@ -34,6 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -333,12 +334,34 @@ func readCustomerKeyFromSecret(secretRef string) (string, error) {
 	return string(customerKeyData), nil
 }
 
+// wrapSSECError checks whether err is an AccessDenied response while SSE-C is
+// configured, and if so, wraps it with guidance about the April 2026 S3 policy
+// change that disables SSE-C by default on new buckets.
+func (o *ObjectStore) wrapSSECError(err error, operation string) error {
+	if err == nil || o.sseCustomerKey == "" {
+		return err
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "AccessDenied" {
+		return errors.Wrapf(err,
+			"%s failed: SSE-C encryption was denied by S3. "+
+				"As of April 2026, new S3 buckets disable SSE-C by default. "+
+				"Enable SSE-C on the bucket with the PutBucketEncryption API, or "+
+				"switch to SSE-KMS (kmsKeyId) which does not require this step",
+			operation,
+		)
+	}
+	return err
+}
+
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	input := o.buildPutObjectInput(bucket, key, body)
 
 	_, err := o.s3Uploader.Upload(context.Background(), input)
-
-	return errors.Wrapf(err, "error putting object %s", key)
+	if err != nil {
+		return o.wrapSSECError(errors.Wrapf(err, "error putting object %s", key), "PutObject")
+	}
+	return nil
 }
 
 // buildPutObjectInput constructs the PutObjectInput for an upload, applying
@@ -414,7 +437,7 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 			).Debug("Object doesn't exist - got not found")
 			return false, nil
 		}
-		return false, errors.WithStack(err)
+		return false, o.wrapSSECError(errors.WithStack(err), "HeadObject")
 	}
 
 	log.Debug("Object exists")
@@ -435,7 +458,7 @@ func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 
 	output, err := o.s3.GetObject(context.Background(), input)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error getting object %s", key)
+		return nil, o.wrapSSECError(errors.Wrapf(err, "error getting object %s", key), "GetObject")
 	}
 
 	return output.Body, nil
@@ -514,7 +537,7 @@ func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (st
 	})
 
 	if err != nil {
-		return "", errors.WithStack(err)
+		return "", o.wrapSSECError(errors.WithStack(err), "CreateSignedURL")
 	}
 	return req.URL, nil
 }

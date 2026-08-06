@@ -398,6 +398,28 @@ The secret must exist in the same namespace as Velero (determined by the `VELERO
 
 ### Important Notes about SSE-C
 
+- **New S3 buckets require SSE-C to be explicitly enabled.** As of April 2026, AWS disables SSE-C by default on all new S3 general purpose buckets. You must enable it on the bucket before use, otherwise S3 will return HTTP 403 (Access Denied) on all SSE-C operations. Enable SSE-C with the AWS CLI:
+
+  ```bash
+  aws s3api put-bucket-encryption \
+    --bucket $BUCKET \
+    --server-side-encryption-configuration '{
+      "Rules": [{
+        "ApplyServerSideEncryptionByDefault": {
+          "SSEAlgorithm": "AES256"
+        },
+        "BucketKeyEnabled": false,
+        "BlockedEncryptionTypes": {
+          "EncryptionType": ["NONE"]
+        }
+      }]
+    }'
+  ```
+
+  For more details, see the [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/blocking-unblocking-s3-c-encryption-gpb.html).
+
+  **If you do not need customer-managed keys, consider using SSE-KMS (`kmsKeyId`) instead.** SSE-KMS does not require this extra bucket configuration step and supports key rotation managed by AWS KMS.
+
 - The customer key must be exactly 32 bytes
 - You cannot use SSE-C in combination with `kmsKeyId`
 - You must specify either `customerKeyEncryptionFile` or `customerKeyEncryptionSecret`, not both
