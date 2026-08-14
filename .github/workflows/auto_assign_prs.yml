@@ -1,22 +1,22 @@
 ---
 name: "Auto Assign Author"
 
-# pull_request_target means that this will run on pull requests, but in
-# the context of the base repo. This should mean PRs from forks are supported.
+# Calls velero-io/velero's reusable workflow so this repo stays in sync with
+# core's auto-assign + CODEOWNERS re-request-review logic instead of
+# maintaining a separate, drifted local copy. Needs .github/auto-assignees.yml
+# (already present in this repo) and .github/CODEOWNERS (added alongside this
+# file) for the called workflow to behave correctly.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  # Automatically assigns reviewers and owner
-  add-reviews:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set the author of a PR as the assignee
-        uses: kentaro-m/auto-assign-action@v1.1.2
-        with:
-          configuration-path: ".github/auto-assignees.yml"
+  auto-assign:
+    uses: velero-io/velero/.github/workflows/auto_assign_prs.yml@main
+    secrets: inherit

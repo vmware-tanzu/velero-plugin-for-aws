@@ -1,0 +1,21 @@
+name: Backport merged pull request
+
+# Requires "Allow GitHub Actions to create and approve pull requests" enabled
+# under Settings > Actions > General for THIS repo (separate from the
+# permissions: block below, cannot be worked around from YAML). Tracked:
+# velero-io/velero#9603.
+on:
+  pull_request_target:
+    types: [closed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  backport:
+    uses: velero-io/velero/.github/workflows/backport.yml@main
+    secrets: inherit
