@@ -18,4 +18,3 @@ permissions:
 jobs:
   backport:
     uses: velero-io/velero/.github/workflows/backport.yml@main
-    secrets: inherit

@@ -19,4 +19,3 @@ permissions:
 jobs:
   auto-assign:
     uses: velero-io/velero/.github/workflows/auto_assign_prs.yml@main
-    secrets: inherit
