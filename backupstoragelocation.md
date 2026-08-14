@@ -84,6 +84,11 @@ spec:
     # 
     # Cannot be used in conjunction with kmsKeyId or customerKeyEncryptionSecret.
     #
+    # NOTE: As of April 2026, AWS disables SSE-C by default on new S3 buckets.
+    # You must explicitly enable SSE-C on the bucket using the PutBucketEncryption
+    # API before using this option. See the README for details.
+    # Consider using kmsKeyId (SSE-KMS) instead, which does not require this step.
+    #
     # Optional (defaults to "", which means SSE-C is disabled).
     customerKeyEncryptionFile: "/credentials/customer-key"
     
@@ -99,6 +104,11 @@ spec:
     # - The key value must be exactly 32 bytes
     #
     # Cannot be used in conjunction with kmsKeyId or customerKeyEncryptionFile.
+    #
+    # NOTE: As of April 2026, AWS disables SSE-C by default on new S3 buckets.
+    # You must explicitly enable SSE-C on the bucket using the PutBucketEncryption
+    # API before using this option. See the README for details.
+    # Consider using kmsKeyId (SSE-KMS) instead, which does not require this step.
     #
     # Optional (defaults to "", which means SSE-C is disabled).
     customerKeyEncryptionSecret: ""
