@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -393,6 +394,76 @@ func TestCreateSignedURL_NoSSECWhenNotConfigured(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/signed", url)
+}
+
+// A presigned URL is verified by whoever fetches it, and that party derives the
+// Host header from the URL itself. The SigV4 signer omits a scheme-default port
+// from the host it signs but leaves it in the URL, so an endpoint configured as
+// https://host:443 is signed over "host" and presented as "host:443". Amazon S3
+// normalizes the Host header before verifying and hides the discrepancy;
+// S3-compatible backends generally do not and answer SignatureDoesNotMatch.
+// See https://github.com/velero-io/velero/issues/10114
+func TestPresignedURLHostOmitsDefaultPort(t *testing.T) {
+	tests := []struct {
+		name           string
+		endpoint       string
+		forcePathStyle bool
+		expectedHost   string
+	}{
+		{
+			name:           "https without a port is unchanged",
+			endpoint:       "https://s3.example.com",
+			forcePathStyle: true,
+			expectedHost:   "s3.example.com",
+		},
+		{
+			name:           "https drops the default port",
+			endpoint:       "https://s3.example.com:443",
+			forcePathStyle: true,
+			expectedHost:   "s3.example.com",
+		},
+		{
+			name:           "http drops the default port",
+			endpoint:       "http://s3.example.com:80",
+			forcePathStyle: true,
+			expectedHost:   "s3.example.com",
+		},
+		{
+			name:           "a non-default port is kept",
+			endpoint:       "https://s3.example.com:9000",
+			forcePathStyle: true,
+			expectedHost:   "s3.example.com:9000",
+		},
+		{
+			name:         "virtual host style drops the default port",
+			endpoint:     "https://s3.example.com:443",
+			expectedHost: "test-bucket.s3.example.com",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := aws.Config{
+				Region: "us-east-1",
+				Credentials: aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+					return aws.Credentials{AccessKeyID: "access-key", SecretAccessKey: "secret-key"}, nil
+				}),
+			}
+
+			client, err := newS3Client(cfg, tc.endpoint, tc.forcePathStyle)
+			require.NoError(t, err)
+
+			req, err := s3.NewPresignClient(client).PresignGetObject(context.Background(), &s3.GetObjectInput{
+				Bucket: aws.String("test-bucket"),
+				Key:    aws.String("test-key"),
+			}, func(o *s3.PresignOptions) { o.Expires = time.Hour })
+			require.NoError(t, err)
+
+			signed, err := url.Parse(req.URL)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedHost, signed.Host)
+		})
+	}
 }
 
 func TestBuildPutObjectInput(t *testing.T) {

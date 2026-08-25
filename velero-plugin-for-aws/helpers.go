@@ -36,6 +36,36 @@ func IsValidS3URLScheme(s3URL string) bool {
 	return true
 }
 
+// stripDefaultPort removes the port from an S3 endpoint URL when it is the
+// default for the URL's scheme, and returns the URL unchanged otherwise.
+//
+// The SigV4 signer omits a scheme-default port from the host header it signs,
+// but leaves the port in the request URL. That is invisible for a request the
+// plugin sends itself, because the signer rewrites the outgoing Host header to
+// match. It is not invisible in a presigned URL: whoever fetches it derives the
+// Host from the URL, so the server hashes "host:443" against a signature
+// computed over "host". Amazon S3 normalizes the Host header before verifying
+// and hides the discrepancy, but S3-compatible backends generally do not and
+// answer SignatureDoesNotMatch.
+//
+// See https://github.com/velero-io/velero/issues/10114
+func stripDefaultPort(s3URL string) string {
+	u, err := url.Parse(s3URL)
+	if err != nil {
+		return s3URL
+	}
+
+	port := u.Port()
+	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
+		// Trimming the suffix rather than using u.Hostname() keeps the brackets
+		// around an IPv6 literal.
+		u.Host = strings.TrimSuffix(u.Host, ":"+port)
+		return u.String()
+	}
+
+	return s3URL
+}
+
 func CheckTags(tagging string) error {
 	tags := strings.Split(tagging, "&")
 	for c, j := range tags {
