@@ -18,25 +18,30 @@ Usage: cp-plugin src dst`)
 	fmt.Printf("Copying %s to %s ...  ", src, dst)
 	srcFile, err := os.Open(src)
 	if err != nil {
-		panic(err)
+		exitOnError("open source file %s: %v", src, err)
 	}
 	defer srcFile.Close()
 	if _, err := os.Stat(dst); errors.Is(err, os.ErrNotExist) {
 		_, err = os.Create(dst)
 		if err != nil {
-			panic(err)
+			exitOnError("create destination file %s: %v", dst, err)
 		}
 	}
 	dstFile, err := os.OpenFile(dst, os.O_WRONLY, 0755)
 	if err != nil {
-		panic(err)
+		exitOnError("open destination file %s for writing: %v", dst, err)
 	}
 	defer dstFile.Close()
 	buf := make([]byte, 1024*128)
 	_, err = io.CopyBuffer(dstFile, srcFile, buf)
 	if err != nil {
-		panic(err)
+		exitOnError("copy %s to %s: %v", src, dst, err)
 	}
 	os.Chmod(dst, 0755)
 	fmt.Println("done.")
+}
+
+func exitOnError(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "Error: failed to "+format+"\n", args...)
+	os.Exit(1)
 }
