@@ -1,0 +1,1 @@
+Fix S3 object tag validation to allow single tags and 256-character tag values.
