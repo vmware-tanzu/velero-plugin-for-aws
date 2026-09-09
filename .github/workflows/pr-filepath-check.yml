@@ -1,0 +1,5 @@
+name: Pull Request File Path Check
+on: [pull_request]
+jobs:
+  filepath-check:
+    uses: velero-io/velero/.github/workflows/pr-filepath-check.yml@main

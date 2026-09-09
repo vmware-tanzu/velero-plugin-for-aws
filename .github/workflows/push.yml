@@ -10,7 +10,7 @@ on:
 
 jobs:
   get-go-version:
-    uses: ./.github/workflows/get-go-version.yaml
+    uses: velero-io/velero/.github/workflows/get-go-version.yaml@main
     with:
       ref: ${{ github.ref_name }}
 
