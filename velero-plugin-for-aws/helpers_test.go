@@ -30,6 +30,33 @@ func TestS3URL(t *testing.T) {
 	assert.False(t, IsValidS3URLScheme(""))
 }
 
+func TestStripDefaultPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		s3URL    string
+		expected string
+	}{
+		{name: "https default port", s3URL: "https://s3.example.com:443", expected: "https://s3.example.com"},
+		{name: "http default port", s3URL: "http://s3.example.com:80", expected: "http://s3.example.com"},
+		{name: "https default port with a path", s3URL: "https://s3.example.com:443/prefix", expected: "https://s3.example.com/prefix"},
+		{name: "https non-default port", s3URL: "https://s3.example.com:9000", expected: "https://s3.example.com:9000"},
+		{name: "http non-default port", s3URL: "http://s3.example.com:8080", expected: "http://s3.example.com:8080"},
+		{name: "https port that is the default of the other scheme", s3URL: "https://s3.example.com:80", expected: "https://s3.example.com:80"},
+		{name: "no port", s3URL: "https://s3.example.com", expected: "https://s3.example.com"},
+		{name: "uppercase scheme", s3URL: "HTTPS://s3.example.com:443", expected: "https://s3.example.com"},
+		{name: "IPv6 literal keeps its brackets", s3URL: "https://[2001:db8::1]:443", expected: "https://[2001:db8::1]"},
+		{name: "IPv6 literal with a non-default port", s3URL: "https://[2001:db8::1]:9000", expected: "https://[2001:db8::1]:9000"},
+		{name: "empty", s3URL: "", expected: ""},
+		{name: "unparseable url is left alone", s3URL: "https://s3.example.com:44 3", expected: "https://s3.example.com:44 3"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, stripDefaultPort(tc.s3URL))
+		})
+	}
+}
+
 func TestS3Tags(t *testing.T) {
 	assert.Error(t, CheckTags("96FrFmTtJcBkEYEVtS3Bxrv2E37KG9m3M9CJqbtVCw7gy4UBEvpBC4h6xdV7FUBag7XeZhccvQuY8AgERdeWafBZRR7NRb8BnA6CkcqDHPpPPFpwLzXenjxZmeRK6J9hty=Value1&Key2=Value2&Key3=Value3"))
 	assert.Error(t, CheckTags("Key1=Value1&Key2=tka2MYGaFegMVkdm5nC58D46dyXCDbKcXnCZNrCHyS6s8TtMacs9HFXpGCNr2PVntCHArkKbgyYntVhBn2AAJXdKkvA9jdRrc4vCsYzCSZ4ZhCR7PBaKgMMdTtz93jRZNNFJcAqzrybDqCEmtKfFj3MdxLSvjej9tqP8bUt66449ZCbPuk8b7ASrYkPf6fQVYXM9rbmtyzWbhxtYdZs7nUaE4pQqtEfggqSEGbNaNWSf6x6vjUVJ2fAsZNfwKMxUwe"))

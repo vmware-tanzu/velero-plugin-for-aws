@@ -1,0 +1,1 @@
+Strip the scheme's default port from s3Url and publicUrl so presigned URLs carry the same host that was signed, fixing SignatureDoesNotMatch on S3-compatible backends.
