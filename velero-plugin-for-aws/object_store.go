@@ -182,7 +182,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		return errors.WithStack(err)
 	}
 	o.s3 = client
-	o.s3Uploader = manager.NewUploader(client)
+	o.s3Uploader = newS3Uploader(client)
 	o.kmsKeyID = kmsKeyID
 	o.serverSideEncryption = serverSideEncryption
 	o.tagging = tagging
@@ -249,6 +249,17 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		o.checksumAlg = string(types.ChecksumAlgorithmCrc32)
 	}
 	return nil
+}
+
+// newS3Uploader builds the multipart transfer manager for client. The
+// manager keeps its own RequestChecksumCalculation (default WhenSupported)
+// and does not inherit the client's, so without this multipart UploadPart
+// calls would still send trailing checksums that some S3-compatible backends
+// reject. See https://github.com/velero-io/velero/issues/10543
+func newS3Uploader(client *s3.Client) *manager.Uploader {
+	return manager.NewUploader(client, func(u *manager.Uploader) {
+		u.RequestChecksumCalculation = client.Options().RequestChecksumCalculation
+	})
 }
 
 func validChecksumAlg(alg string) bool {
