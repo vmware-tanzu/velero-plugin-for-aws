@@ -1,0 +1,1 @@
+Fix multipart uploads to S3-compatible backends: the transfer manager now inherits the client's RequestChecksumCalculation instead of forcing a CRC32 trailer on every part (objects above the default 5 MiB part size failed with EOF on backends without aws-chunked support).

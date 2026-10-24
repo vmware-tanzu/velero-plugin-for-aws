@@ -23,6 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/pkg/errors"
@@ -467,4 +468,47 @@ func TestCreateSignedURL_NoSSECWhenNotConfigured(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/signed", url)
+}
+
+func TestNewS3UploaderInheritsRequestChecksumCalculation(t *testing.T) {
+	tests := []struct {
+		name string
+		mode aws.RequestChecksumCalculation
+	}{
+		{
+			name: "WhenRequired",
+			mode: aws.RequestChecksumCalculationWhenRequired,
+		},
+		{
+			name: "WhenSupported",
+			mode: aws.RequestChecksumCalculationWhenSupported,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := s3.NewFromConfig(aws.Config{Region: "us-east-1"}, func(o *s3.Options) {
+				o.RequestChecksumCalculation = tc.mode
+			})
+
+			uploader := newS3Uploader(client)
+			assert.Equal(t, tc.mode, uploader.RequestChecksumCalculation)
+		})
+	}
+
+	t.Run("plugin client default", func(t *testing.T) {
+		// newS3Client opts out of checksum calculation unless required; the
+		// multipart uploader must follow so that UploadPart does not send a
+		// trailing checksum that the single-part PutObject already omits.
+		client, err := newS3Client(aws.Config{Region: "us-east-1"}, "", false)
+		require.NoError(t, err)
+		require.Equal(t, aws.RequestChecksumCalculationWhenRequired, client.Options().RequestChecksumCalculation)
+
+		uploader := newS3Uploader(client)
+		assert.Equal(t, aws.RequestChecksumCalculationWhenRequired, uploader.RequestChecksumCalculation)
+
+		// The transfer manager's own default differs from the client's, which
+		// is why the uploader has to inherit it explicitly.
+		assert.Equal(t, aws.RequestChecksumCalculationWhenSupported, manager.NewUploader(client).RequestChecksumCalculation)
+	})
 }
